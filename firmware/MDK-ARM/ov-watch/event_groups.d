@@ -1,0 +1,15 @@
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
+ov-watch\event_groups.o: C:\keil5\ARM\ARMCC\Bin\..\include\stdlib.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h
+ov-watch\event_groups.o: C:\keil5\ARM\ARMCC\Bin\..\include\stddef.h
+ov-watch\event_groups.o: C:\keil5\ARM\ARMCC\Bin\..\include\stdint.h
+ov-watch\event_groups.o: ../Core/Inc/FreeRTOSConfig.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/portmacro.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/timers.h
+ov-watch\event_groups.o: ../Middlewares/Third_Party/FreeRTOS/Source/include/event_groups.h
