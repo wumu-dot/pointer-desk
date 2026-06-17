@@ -216,6 +216,31 @@ void weather_frame_parse(const char *frame) {
 }
 ```
 
+#### 并发安全说明
+
+当前架构下 `weather_frame_parse()` 和 `temp_mode_render()` 都在 `StartTaskBG` 同一任务中顺序执行，不会被抢占，**无实际竞态**。但如果将来有人把渲染移到其他任务（如恢复 TaskDisplay），下面两个措施保证安全：
+
+```c
+// 写入端: 先在栈上构造完整数据，再一次写入 g_weather
+//        → 不存在"字符串拷一半被读到"的窗口
+weather_data_t tmp;
+tmp.temperature      = parsed_temp;
+tmp.humidity         = (uint8_t)parsed_hum;
+strncpy(tmp.description, parsed_desc, 31);
+tmp.description[31]  = '\0';
+tmp.last_update_tick = HAL_GetTick();
+tmp.valid            = true;
+g_weather = tmp;                    // 结构体赋值，ARMCC 生成 memcpy，一次性
+
+// 读取端: 进入渲染函数时立即快照到栈
+void temp_mode_render(void) {
+    weather_data_t local = g_weather;  // 只读一次，后续全部用 local
+    // ... 使用 local.temperature, local.humidity, local.description ...
+}
+```
+
+> 无需互斥锁或关中断。即使将来写入/读取在不同任务中，`memcpy` 的结构体拷贝也是单条 ARM 指令（LDM/STM 块传输），不存在半字撕裂。
+
 ### 4.4 数据结构
 
 ```c
@@ -366,6 +391,7 @@ if (HAL_GetTick() - last_device_info_render > 10000) {
 | 天气描述含空格 | ESP32 端发前空格→`_`，STM32 收后 `_`→空格 |
 | ARMCC 不支持 `sscanf %hhu` | 用 `%d` 接收 humidity，收到后转 `uint8_t` |
 | 帧头缺失 | 只处理 `$` 开头的帧，非 `$` 开头直接丢弃 |
+| 并发读写 `g_weather` | 写入端栈上构造→一次性赋值；读取端进函数即快照到栈（见4.3节） |
 
 ---
 
