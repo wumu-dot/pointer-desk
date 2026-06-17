@@ -575,6 +575,49 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     /* USER CODE END USART1_MspInit 1 */
 
   }
+  /* USER CODE BEGIN UART_MspInit 1 */
+  else if(huart->Instance==USART2)
+  {
+    /* Peripheral clock enable */
+    __HAL_RCC_USART2_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    /**USART2 GPIO Configuration
+        PD6     ------> USART2_RX (AF7)
+        PD5     ------> ANALOG (TX disabled — ESP32 sends, STM32 listens only)
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /* PD5: force ANALOG — disable TX output to prevent floating noise */
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /* DMA1_Stream5 Ch4 → USART2_RX */
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    hdma_usart2_rx.Instance = DMA1_Stream5;
+    hdma_usart2_rx.Init.Channel = DMA_CHANNEL_4;
+    hdma_usart2_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_usart2_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_usart2_rx.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_usart2_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+    hdma_usart2_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+    hdma_usart2_rx.Init.Mode = DMA_CIRCULAR;
+    hdma_usart2_rx.Init.Priority = DMA_PRIORITY_MEDIUM;
+    HAL_DMA_Init(&hdma_usart2_rx);
+    __HAL_LINKDMA(huart, hdmarx, hdma_usart2_rx);
+
+    /* DMA1_Stream5 interrupt */
+    HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 7, 0);
+    HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  }
+  /* USER CODE END UART_MspInit 1 */
 
 }
 
@@ -606,6 +649,15 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
 
     /* USER CODE END USART1_MspDeInit 1 */
   }
+  /* USER CODE BEGIN UART_MspDeInit 1 */
+  else if(huart->Instance==USART2)
+  {
+    __HAL_RCC_USART2_CLK_DISABLE();
+    HAL_GPIO_DeInit(GPIOD, GPIO_PIN_5|GPIO_PIN_6);
+    HAL_NVIC_DisableIRQ(DMA1_Stream5_IRQn);
+    HAL_DMA_DeInit(huart->hdmarx);
+  }
+  /* USER CODE END UART_MspDeInit 1 */
 
 }
 

@@ -207,31 +207,41 @@ bool fs_config_save(const char *key, const void *data, size_t size)
         return false;
     }
 
-    /* 检查数据区是否有足够空间 */
-    if ((uint32_t)(g_next_data_offset + size) > CONFIG_DATA_END) {
-        LOG_ERR("fs_config_save: out of space (need %u + %u > %lu)",
-                (unsigned int)g_next_data_offset, (unsigned int)size,
-                (unsigned long)CONFIG_DATA_END);
-        return false;
-    }
+    int  idx          = find_entry(key);
+    bool is_new       = (idx < 0);
+    bool data_grew    = false;
+    uint32_t write_offset;
 
-    int idx = find_entry(key);
-
-    /* 如果是新条目, 分配槽位 */
-    if (idx < 0) {
+    if (is_new) {
+        /* 新条目: 分配槽位 */
         idx = alloc_entry();
         if (idx < 0) {
             LOG_ERR("fs_config_save: directory full (%d entries)", FS_MAX_ENTRIES);
             return false;
         }
+        write_offset = g_next_data_offset;
+    } else if (size <= g_dir.entries[idx].size) {
+        /* 已存在且大小未增: 原地覆写, 不推进空闲指针 */
+        write_offset = g_dir.entries[idx].offset;
+    } else {
+        /* 已存在但数据变大: 追加到末尾, 旧数据原地废弃 */
+        write_offset = g_next_data_offset;
+        data_grew    = true;
     }
 
-    /* 写入数据到 Flash (到当前空闲位置; 旧数据原地废弃) */
-    uint32_t write_offset = g_next_data_offset;
+    /* 仅追加写入时检查空间 (原地覆写不需要新空间) */
+    if ((is_new || data_grew) &&
+        (uint32_t)(write_offset + size) > CONFIG_DATA_END) {
+        LOG_ERR("fs_config_save: out of space (need %u + %u > %lu)",
+                (unsigned int)write_offset, (unsigned int)size,
+                (unsigned long)CONFIG_DATA_END);
+        return false;
+    }
+
+    /* 写入数据到 Flash */
     w25q64_write(write_offset, (const uint8_t *)data, (uint32_t)size);
 
     /* 更新目录条目 */
-    bool is_new = (!(g_dir.entries[idx].flags & FS_FLAG_VALID));
     memset(&g_dir.entries[idx], 0, sizeof(fs_entry_t));
     strncpy(g_dir.entries[idx].key, key, sizeof(g_dir.entries[idx].key) - 1);
     g_dir.entries[idx].key[sizeof(g_dir.entries[idx].key) - 1] = '\0';
@@ -254,11 +264,14 @@ bool fs_config_save(const char *key, const void *data, size_t size)
         return false;
     }
 
-    /* 推进空闲偏移 */
-    g_next_data_offset = write_offset + (uint32_t)size;
+    /* 只在新增或数据变大时推进空闲偏移 */
+    if (is_new || data_grew) {
+        g_next_data_offset = write_offset + (uint32_t)size;
+    }
 
-    LOG("fs_config_save '%s': %u bytes @ 0x%08lX", key,
-        (unsigned int)size, (unsigned long)write_offset);
+    LOG("fs_config_save '%s': %u bytes @ 0x%08lX [%s]", key,
+        (unsigned int)size, (unsigned long)write_offset,
+        is_new ? "new" : (data_grew ? "grew" : "in-place"));
     return true;
 }
 

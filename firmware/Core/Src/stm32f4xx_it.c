@@ -61,7 +61,8 @@ extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN EV */
-
+extern DMA_HandleTypeDef hdma_spi1_tx;
+extern DMA_HandleTypeDef hdma_usart2_rx;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -219,5 +220,16 @@ void TIM6_DAC_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void DMA2_Stream3_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_spi1_tx);
+}
 
+/**
+  * @brief DMA1_Stream5 IRQ handler — USART2 RX DMA 循环接收 (ESP32 天气数据)
+  */
+void DMA1_Stream5_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_usart2_rx);
+}
 /* USER CODE END 1 */

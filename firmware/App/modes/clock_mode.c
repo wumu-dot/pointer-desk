@@ -129,109 +129,89 @@ void clock_mode_render(void)
         pm = rtc_drv_is_pm();
     }
 
-    /* 若无变化则跳过渲染 */
+    /* 快速退出: 无任何变化 */
     if (!display_changed(&dt, pm)) {
         return;
     }
 
+    /*
+     * 逐区域判断: 只重绘 + 标记脏区真正变化的部分。
+     * 每秒: 仅时间文字 (~96x24≈2.3KB flush, <3ms, 撕裂线不可见)
+     * 每分钟: 时间+进度条
+     * 每天: 时间+日期+进度条
+     */
+    bool time_changed = (need_full_refresh ||
+                         dt.time.hours   != cached.hours ||
+                         dt.time.minutes != cached.minutes ||
+                         dt.time.seconds != cached.seconds);
+    bool date_changed = (need_full_refresh ||
+                         dt.date.day     != cached.day ||
+                         dt.date.month   != cached.month ||
+                         dt.date.year    != cached.year ||
+                         dt.date.weekday != cached.weekday);
+    bool ampm_changed = (need_full_refresh || pm != cached.is_pm || use_24h != cached.show_24h);
+    bool bar_changed   = (need_full_refresh ||
+                         dt.time.hours   != cached.hours ||
+                         dt.time.minutes != cached.minutes);  /* 每分钟 */
+
     update_cache(&dt, pm);
 
-    /* ================================================================
-     * 1. AM/PM 图标 (右上角)
-     * ================================================================ */
-    if (!use_24h) {
-        gui_icon_t icon = pm ? ICON_MOON : ICON_SUN;
-        gui_draw_icon(LCD_WIDTH - 14, 4, icon, COLOR_YELLOW);
-        /* gui_draw_icon() 内部已调用 gui_dirty_mark() */
-    } else {
-        /* 24h模式：清除图标区域 */
-        st7735_fill_rect(LCD_WIDTH - 16, 0, 16, 20, COLOR_BLACK);
-        gui_dirty_mark(LCD_WIDTH - 16, 0, 16, 20);
+    /* ---- 1. AM/PM 图标 (仅上下/午切换或格式切换时) ---- */
+    if (ampm_changed) {
+        if (!use_24h) {
+            gui_draw_icon(LCD_WIDTH - 14, 4, pm ? ICON_MOON : ICON_SUN, COLOR_YELLOW);
+        } else {
+            st7735_fill_rect(LCD_WIDTH - 16, 0, 16, 20, COLOR_BLACK);
+            gui_dirty_mark(LCD_WIDTH - 16, 0, 16, 20);
+        }
     }
 
-    /* ================================================================
-     * 2. 时间显示 HH:MM:SS (居中)
-     * ================================================================ */
-    {
+    /* ---- 2. 时间 HH:MM:SS (每秒) ---- */
+    if (time_changed) {
         char time_str[16];
-        uint8_t display_hour;
-
-        if (use_24h) {
-            display_hour = dt.time.hours;
-        } else {
-            display_hour = rtc_drv_get_hour12();
-        }
-
+        uint8_t display_hour = use_24h ? dt.time.hours : rtc_drv_get_hour12();
         snprintf(time_str, sizeof(time_str), "%02u:%02u:%02u",
                  display_hour, dt.time.minutes, dt.time.seconds);
-
-        /* gui_draw_text_centered() 内部已调用 gui_dirty_mark() */
         gui_draw_text_centered(LCD_WIDTH / 2, 40, time_str,
-                               2,                /* font_id=2 → FONT_12x24 */
-                               COLOR_WHITE, COLOR_BLACK);
+                               2, COLOR_WHITE, COLOR_BLACK);
     }
 
-    /* ================================================================
-     * 3. 日期显示 YYYY-MM-DD 周X (居中)
-     * ================================================================ */
-    {
+    /* ---- 3. 日期 (每天) ---- */
+    if (date_changed) {
         char date_str[32];
         const char *weekday = rtc_drv_weekday_str(dt.date.weekday);
-
         snprintf(date_str, sizeof(date_str), "%04u-%02u-%02u %s",
                  dt.date.year, dt.date.month, dt.date.day,
                  weekday ? weekday : "");
-
-        /* gui_draw_text_centered() 内部已调用 gui_dirty_mark() */
         gui_draw_text_centered(LCD_WIDTH / 2, 70, date_str,
-                               0,                /* font_id=0 → FONT_6x8 */
-                               COLOR_GRAY, COLOR_BLACK);
+                               0, COLOR_GRAY, COLOR_BLACK);
     }
 
-    /* ================================================================
-     * 4. 24小时浓缩进度条 (底部)
-     * ================================================================ */
-    {
-        uint16_t bar_x = 5;
-        uint16_t bar_y = 140;
-        uint16_t bar_w = LCD_WIDTH - 10;
-        uint16_t bar_h = 4;
-
-        /* 进度计算: 已过分钟数 / 全天分钟数 */
+    /* ---- 4. 进度条 (每分钟) ---- */
+    if (bar_changed) {
+        uint16_t bar_x = 5, bar_y = 140;
+        uint16_t bar_w = LCD_WIDTH - 10, bar_h = 4;
         uint16_t total_minutes = (uint16_t)dt.time.hours * 60 + dt.time.minutes;
         uint16_t dot_pos = (uint16_t)((uint32_t)bar_w * total_minutes / 1440);
 
-        /* 背景条 */
         st7735_fill_rect(bar_x, bar_y, bar_w, bar_h, COLOR_DARK_GRAY);
-
-        /* 已过部分 (白色点, 3px宽) */
         if (dot_pos > 0) {
-            /* dot_pos 不会超过 bar_w，但为安全起见限制一下 */
-            if (dot_pos < 3) {
-                dot_pos = 3;
-            }
+            if (dot_pos < 3) dot_pos = 3;
             st7735_fill_rect(bar_x, bar_y, dot_pos, bar_h, COLOR_WHITE);
         }
-
         gui_dirty_mark(bar_x, bar_y, bar_w, bar_h);
     }
 }
 
 void clock_mode_handle_button(button_id_t btn, button_event_t event)
 {
-    /* UP或DOWN短按：切换 12/24 小时制 */
-    if (event == BTN_EVENT_SHORT_PRESS) {
-        if (btn == BTN_UP || btn == BTN_DOWN) {
-            use_24h = !use_24h;
-
-            rtc_format_t fmt = use_24h ? RTC_FORMAT_24H : RTC_FORMAT_12H;
-            rtc_drv_set_format(fmt);
-
-            LOG("CLOCK: format switched to %s", use_24h ? "24h" : "12h");
-
-            /* 触发全屏刷新 */
-            trigger_full_refresh();
-        }
+    /* 单键模式: 长按切换 12/24h */
+    if (event == BTN_EVENT_LONG_PRESS) {
+        use_24h = !use_24h;
+        rtc_format_t fmt = use_24h ? RTC_FORMAT_24H : RTC_FORMAT_12H;
+        rtc_drv_set_format(fmt);
+        LOG("CLOCK: format switched to %s", use_24h ? "24h" : "12h");
+        trigger_full_refresh();
     }
 }
 

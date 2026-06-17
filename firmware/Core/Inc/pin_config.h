@@ -43,12 +43,12 @@
 #define FLASH_SPI           SPI2
 #define FLASH_SPI_CLK_ENABLE __HAL_RCC_SPI2_CLK_ENABLE
 
-#define FLASH_SCK_PIN       GPIO_PIN_13
+#define FLASH_SCK_PIN       GPIO_PIN_10
 #define FLASH_SCK_PORT      GPIOB
-#define FLASH_MOSI_PIN      GPIO_PIN_15
-#define FLASH_MOSI_PORT     GPIOB
-#define FLASH_MISO_PIN      GPIO_PIN_14
-#define FLASH_MISO_PORT     GPIOB
+#define FLASH_MOSI_PIN      GPIO_PIN_3
+#define FLASH_MOSI_PORT     GPIOC
+#define FLASH_MISO_PIN      GPIO_PIN_2
+#define FLASH_MISO_PORT     GPIOC
 #define FLASH_CS_PIN        GPIO_PIN_12
 #define FLASH_CS_PORT       GPIOB
 
@@ -124,10 +124,10 @@
 
 /* 外部 SHT30 (预留) */
 #define SHT30_I2C           I2C2
-#define SHT30_I2C_SCL_PIN   GPIO_PIN_10
-#define SHT30_I2C_SCL_PORT  GPIOB
-#define SHT30_I2C_SDA_PIN   GPIO_PIN_11
-#define SHT30_I2C_SDA_PORT  GPIOB
+#define SHT30_I2C_SCL_PIN   GPIO_PIN_1
+#define SHT30_I2C_SCL_PORT  GPIOF
+#define SHT30_I2C_SDA_PIN   GPIO_PIN_0
+#define SHT30_I2C_SDA_PORT  GPIOF
 #define SHT30_I2C_ADDR      0x44
 
 /* ================================================================
@@ -150,5 +150,13 @@
 #define DEBUG_TX_PORT       GPIOA
 #define DEBUG_RX_PIN        GPIO_PIN_10
 #define DEBUG_RX_PORT       GPIOA
+
+/* ================================================================
+ * ESP32 天气桥接 UART (RX only)
+ * ================================================================ */
+#define ESP32_UART          USART2
+#define ESP32_UART_BAUD     115200
+#define ESP32_RX_PIN        GPIO_PIN_6
+#define ESP32_RX_PORT       GPIOD
 
 #endif /* PIN_CONFIG_H */

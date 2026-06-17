@@ -127,37 +127,27 @@ mode_id_t mode_manager_get_current(void)
 
 void mode_manager_handle_button(button_id_t btn, button_event_t event)
 {
-    /* 忽略无效事件 */
-    if (event == BTN_EVENT_NONE) {
-        return;
-    }
+    if (event == BTN_EVENT_NONE) return;
 
-    /* 时间设置模式: 任意按键跳转设置模式配置时间 */
+    /* 时间设置模式: 任意按键进入运行态 */
     if (app_state == APP_STATE_TIME_SETUP) {
         app_state = APP_STATE_RUNNING;
-        mode_manager_switch_to(MODE_SETTINGS);
+        mode_manager_switch_to(MODE_CLOCK);
         return;
     }
 
-    /* 全局导航: 左右键短按切换模式 (循环) */
+    /* 单键模式: SHORT = 下一个模式, LONG = 当前模式动作 */
     if (event == BTN_EVENT_SHORT_PRESS) {
-        if (btn == BTN_LEFT) {
-            mode_id_t prev = (current_mode == 0)
-                           ? (MODE_COUNT - 1)
-                           : (current_mode - 1);
-            mode_manager_switch_to(prev);
-            return;
-        }
-        if (btn == BTN_RIGHT) {
-            mode_id_t next = (current_mode + 1) % MODE_COUNT;
-            mode_manager_switch_to(next);
-            return;
-        }
+        mode_id_t next = (current_mode + 1) % MODE_COUNT;
+        mode_manager_switch_to(next);
+        return;
     }
 
-    /* 分发给当前模式处理 */
-    if (mode_ops[current_mode].button != NULL) {
-        mode_ops[current_mode].button(btn, event);
+    if (event == BTN_EVENT_LONG_PRESS) {
+        if (mode_ops[current_mode].button != NULL) {
+            mode_ops[current_mode].button(btn, event);
+        }
+        return;
     }
 }
 

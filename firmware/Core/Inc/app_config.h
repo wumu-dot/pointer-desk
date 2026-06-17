@@ -8,6 +8,7 @@
 #define APP_CONFIG_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* ================================================================
  * 显示
@@ -128,5 +129,18 @@
     #define LOG(fmt, ...)
     #define LOG_ERR(fmt, ...)
 #endif
+
+/* ================================================================
+ * ESP32 天气数据 (UART 桥接收)
+ * ================================================================ */
+typedef struct {
+    float    temperature;       /* 气温 °C                       */
+    uint8_t  humidity;          /* 湿度 %                        */
+    char     description[32];   /* 天气描述 "Cloud", "Rain" 等   */
+    uint32_t last_update_tick;  /* 最后一帧的时间戳 (HAL_GetTick) */
+    bool     valid;             /* 是否收到过至少一帧             */
+} weather_data_t;
+
+extern weather_data_t g_weather;
 
 #endif /* APP_CONFIG_H */

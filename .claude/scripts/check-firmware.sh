@@ -47,25 +47,33 @@ check "RTC uses FORMAT_BIN (not BCD)" \
 check "RTC uses STOREOPERATION_SET" \
     "RTC_STOREOPERATION_SET" "$FW/Core/Src/main.c" "found"
 
-# SPI speed
-check "SPI1 prescaler is 4 (10.5MHz, not 16/2.6MHz)" \
-    "BAUDRATEPRESCALER_4" "$FW/Core/Src/main.c" "found"
+# SPI speed: APB2=84MHz, SPI1=84/8=10.5MHz (within ST7735 max 15MHz)
+check "SPI1 prescaler is 8 (10.5MHz, within ST7735 spec)" \
+    "BAUDRATEPRESCALER_8" "$FW/Core/Src/main.c" "found"
 
 # Dead code
 check "state.scale dead code removed" \
     "state\.scale" "$FW/Middleware/pointer/pointer_engine.c" "absent"
 
 # Draw text correctness (check: draws per-char, calls st7735_draw_char for each)
-check "draw_text uses per-char st7735_draw_char" \
-    "st7735_draw_char.*\*str" "$FW/Drivers/BSP/lcd/st7735.c" "found"
+check "st7735 uses framebuffer (g_fb) + flush" \
+    "g_fb.*LCD_WIDTH" "$FW/Drivers/BSP/lcd/st7735.c" "found"
+
+# clock_mode must selectively render per-section (not whole screen every second)
+if grep -q "time_changed\|date_changed\|ampm_changed\|bar_changed" "$FW/App/modes/clock_mode.c" 2>/dev/null; then
+    echo "  OK:   clock_mode uses selective per-section render (small flush, no tear)"
+else
+    echo "  FAIL: clock_mode missing per-section render (full screen every second!)"
+    errors=$((errors + 1))
+fi
 
 # Motor feedback loop removed
 check "BG task no longer sends motor targets" \
     "QueueMotorTargetsHandle.*pointer_get_current_angle" "$FW/Core/Src/freertos.c" "absent"
 
 # Render dedup in place
-check "temp_mode has render cache" \
-    "render_cache" "$FW/App/modes/temp_mode.c" "found"
+check "temp_mode has render cache (last_rendered)" \
+    "last_rendered" "$FW/App/modes/temp_mode.c" "found"
 
 check "timer_mode has render cache" \
     "render_cache" "$FW/App/modes/timer_mode.c" "found"
@@ -90,6 +98,18 @@ check "w25q64_init called in fs_mgr.c (deferred to BG task)" \
 
 check "fs_mgr_init NOT called in main.c (deferred to BG task)" \
     "fs_mgr_init()" "$FW/Core/Src/main.c" "absent"
+
+# Framebuffer: st7735_init must flush after memset (TFT GRAM must sync)
+if grep -A3 "memset.*g_fb" "$FW/Drivers/BSP/lcd/st7735.c" 2>/dev/null | grep -q "st7735_flush"; then
+    echo "  OK:   st7735_init calls flush after memset"
+else
+    echo "  FAIL: st7735_init missing flush after memset (TFT shows garbage)"
+    errors=$((errors + 1))
+fi
+
+# SPI1 must NOT use prescaler 4 (21MHz exceeds ST7735 max 15MHz)
+check "SPI1 prescaler 4 removed (was 21MHz, too fast)" \
+    "BAUDRATEPRESCALER_4" "$FW/Core/Src/main.c" "absent"
 
 echo ""
 if [ $errors -eq 0 ]; then

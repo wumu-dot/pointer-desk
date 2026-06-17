@@ -69,7 +69,9 @@ void Error_Handler(void);
 #define CSB12_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-
+extern DMA_HandleTypeDef hdma_spi1_tx;
+extern UART_HandleTypeDef huart2;
+extern DMA_HandleTypeDef hdma_usart2_rx;
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

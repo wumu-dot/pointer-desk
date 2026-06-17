@@ -38,6 +38,7 @@
 #include "app_config.h"
 #include "temp_sensor.h"
 #include "rtc_drv.h"
+#include "weather_bridge.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -109,6 +110,9 @@ void StartTaskBG(void *argument) {
   uint32_t last_update = osKernelGetTickCount();
 
   for (;;) {
+    /* 0. ESP32 UART 天气数据 DMA 轮询 */
+    weather_bridge_poll_dma();
+
     /* 1. 处理按键事件 */
     btn_msg_t btn_msg;
     while (osMessageQueueGet(QueueBtnEventsHandle, &btn_msg, NULL, 0) == osOK) {
@@ -123,46 +127,34 @@ void StartTaskBG(void *argument) {
       mode_manager_update();
     }
 
-    /* 3. 渲染请求 — 当前模式绘制到屏幕 */
+    /* 3. 渲染请求 — 写入帧缓冲 (仅渲染变化区域, 每区单独标记) */
     mode_manager_render();
 
-    /* 4. 脏矩形 → 显示任务 */
+    /* 4. 逐脏矩形 flush (每个<5ms, 撕裂线不可见) */
     if (gui_dirty_get_count() > 0) {
-      dirty_rect_t merged = gui_dirty_merge();
-      if (merged.valid) {
-        render_msg_t cmd = {
-          .cmd    = RENDER_RECT,
-          .param1 = merged.x,
-          .param2 = merged.y,
-          .param3 = merged.w,
-          .param4 = merged.h,
-          .color  = 0,
-          .ptr_or_val = 0,
-        };
-        osMessageQueuePut(QueueRenderCmdsHandle, &cmd, 0, 0);
+      const dirty_rect_t *rects = gui_dirty_get_all();
+      for (uint8_t i = 0; i < MAX_DIRTY_RECTS; i++) {
+        if (rects[i].valid) {
+          st7735_flush_rect(rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+        }
       }
       gui_dirty_clear();
     }
 
-    osDelay(pdMS_TO_TICKS(20)); /* 50Hz 循环 */
+    osDelay(pdMS_TO_TICKS(50)); /* 20Hz 循环 */
   }
 }
 
 /* ================================================================
- * 显示任务 — 30fps, 接收渲染指令, 局部刷新 TFT
- *   (当前模式已直接写入 TFT, 此任务保留为扩展点)
+ * 显示任务 — 闲置 (帧缓冲刷新已由 BG 任务完成)
  * ================================================================ */
 void StartTaskDisplay(void *argument) {
   (void)argument;
 
   for (;;) {
-    render_msg_t cmd;
-    if (osMessageQueueGet(QueueRenderCmdsHandle, &cmd, NULL, 0) == osOK) {
-      /* 当前架构下, 渲染已由 mode_manager_render() 直接完成。
-       * 显示任务负责协调刷新时序, 未来可加入双缓冲/垂直同步。 */
-      (void)cmd;
-    }
-    osDelay(pdMS_TO_TICKS(DISPLAY_REFRESH_MS));
+    /* 帧缓冲模式下, BG 任务已负责刷新。
+     * 此任务保留供未来双缓冲/动画扩展。 */
+    osDelay(pdMS_TO_TICKS(1000));
   }
 }
 

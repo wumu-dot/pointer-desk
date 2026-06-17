@@ -161,115 +161,42 @@ void timer_mode_render(void) {
                            COLOR_BLACK);
 
     /* ---- 底部提示 ---- */
-    gui_draw_text_aligned(150, "+/-:SET  OK:START  <:RST",
+    gui_draw_text_aligned(150, "HOLD: START/PAUSE",
                           0, COLOR_DARK_GRAY, COLOR_BLACK, GUI_ALIGN_CENTER);
 }
 
 void timer_mode_handle_button(button_id_t btn, button_event_t event) {
-    bool refresh = false;
+    /* 单键模式: 只有长按到达这里 (短按由 mode_manager 控制切换) */
 
-    /* ================================================================
-     * 通用处理 (不受当前状态限制)
-     * ================================================================ */
-
-    /* FINISHED: 任意短按 → 重置 */
-    if (state == TIMER_FINISHED && event == BTN_EVENT_SHORT_PRESS) {
+    /* FINISHED → 长按重置 */
+    if (state == TIMER_FINISHED && event == BTN_EVENT_LONG_PRESS) {
         state         = TIMER_STOPPED;
         remaining_sec = total_sec;
-        refresh       = true;
         LOG("Timer reset from FINISHED");
+        st7735_fill_screen(COLOR_BLACK);
+        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        return;
     }
 
-    /* ================================================================
-     * RUNNING 状态
-     * ================================================================ */
-    if (state == TIMER_RUNNING) {
-        if (btn == BTN_CENTER && event == BTN_EVENT_SHORT_PRESS) {
-            state   = TIMER_PAUSED;
-            refresh = true;
-            LOG("Timer paused");
-        }
+    /* RUNNING → 长按暂停 */
+    if (state == TIMER_RUNNING && event == BTN_EVENT_LONG_PRESS) {
+        state = TIMER_PAUSED;
+        LOG("Timer paused");
+        st7735_fill_screen(COLOR_BLACK);
+        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        return;
     }
 
-    /* ================================================================
-     * STOPPED / PAUSED 状态
-     * ================================================================ */
-    if (state == TIMER_STOPPED || state == TIMER_PAUSED) {
-
-        /* UP: 增加时长 */
-        if (btn == BTN_UP) {
-            if (event == BTN_EVENT_SHORT_PRESS) {
-                if (total_sec < 7200) {
-                    total_sec += 60;
-                }
-                refresh = true;
-            } else if (event == BTN_EVENT_LONG_PRESS ||
-                       event == BTN_EVENT_LONG_REPEAT) {
-                if (total_sec < 7200) {
-                    total_sec += 600;
-                    if (total_sec > 7200) {
-                        total_sec = 7200;
-                    }
-                }
-                refresh = true;
-            }
-        }
-
-        /* DOWN: 减少时长 */
-        if (btn == BTN_DOWN) {
-            if (event == BTN_EVENT_SHORT_PRESS) {
-                if (total_sec > 60) {
-                    total_sec -= 60;
-                }
-                refresh = true;
-            } else if (event == BTN_EVENT_LONG_PRESS ||
-                       event == BTN_EVENT_LONG_REPEAT) {
-                if (total_sec > 60) {
-                    total_sec -= 600;
-                    if (total_sec < 60) {
-                        total_sec = 60;
-                    }
-                }
-                refresh = true;
-            }
-        }
-
-        /* CENTER: 开始 / 继续 */
-        if (btn == BTN_CENTER && event == BTN_EVENT_SHORT_PRESS) {
-            if (state == TIMER_PAUSED) {
-                /* 从暂停恢复：重新计算 start_tick */
-                start_tick = HAL_GetTick() - (total_sec - remaining_sec) * 1000;
-            } else {
-                /* 全新开始 */
-                remaining_sec = total_sec;
-                start_tick    = HAL_GetTick();
-            }
-            state   = TIMER_RUNNING;
-            refresh = true;
-            LOG("Timer started (remaining=%lu sec)", (unsigned long)remaining_sec);
-        }
-
-        /* LEFT: 重置 */
-        if (btn == BTN_LEFT && event == BTN_EVENT_SHORT_PRESS) {
+    /* STOPPED/PAUSED → 长按开始/继续 */
+    if ((state == TIMER_STOPPED || state == TIMER_PAUSED) && event == BTN_EVENT_LONG_PRESS) {
+        if (state == TIMER_PAUSED) {
+            start_tick = HAL_GetTick() - (total_sec - remaining_sec) * 1000;
+        } else {
             remaining_sec = total_sec;
-            state         = TIMER_STOPPED;
-            refresh       = true;
-            LOG("Timer reset");
+            start_tick    = HAL_GetTick();
         }
-
-        /* 时长调整后，如果处于 STOPPED 状态，同步 remaining */
-        if (refresh && state == TIMER_STOPPED) {
-            remaining_sec = total_sec;
-        }
-
-        /* 如果处于 PAUSED 状态且 remaining 超出新的 total，则钳位 */
-        if (state == TIMER_PAUSED && remaining_sec > total_sec) {
-            remaining_sec = total_sec;
-        }
-    }
-
-    /* ---- 刷新显示 ---- */
-    if (refresh) {
+        state = TIMER_RUNNING;
+        LOG("Timer started (remaining=%lu sec)", (unsigned long)remaining_sec);
         st7735_fill_screen(COLOR_BLACK);
         gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
     }

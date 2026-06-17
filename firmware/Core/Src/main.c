@@ -62,6 +62,8 @@ RTC_HandleTypeDef hrtc;
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
+DMA_HandleTypeDef hdma_spi1_tx;
+
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
@@ -118,12 +120,22 @@ const osEventFlagsAttr_t EvtMotor_attributes = {
   .name = "EvtMotor"
 };
 /* USER CODE BEGIN PV */
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
 
+/* USART2 DMA 接收缓冲区 (ESP32 天气桥接) */
+uint8_t  uart2_rx_buf[256];
+char     uart2_line_buf[128];
+uint8_t  uart2_line_pos;
+uint32_t uart2_dma_prev;
+
+weather_data_t g_weather;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM2_Init(void);
@@ -134,6 +146,7 @@ static void MX_I2C2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_USART2_UART_Init(void);
 void StartTaskButton(void *argument);
 void StartTaskBG(void *argument);
 void StartTaskDisplay(void *argument);
@@ -177,6 +190,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_SPI1_Init();
   MX_SPI2_Init();
   MX_TIM2_Init();
@@ -187,9 +201,13 @@ int main(void)
   MX_RTC_Init();
   MX_TIM5_Init();
   MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   LOG("========== OV-Watch Firmware v1.0.0 ==========\r\n");
   LOG("System Core Clock: %lu MHz\r\n", SystemCoreClock / 1000000);
+
+  /* ---- USART2 DMA 启动 — ESP32 天气数据 ---- */
+  HAL_UART_Receive_DMA(&huart2, uart2_rx_buf, sizeof(uart2_rx_buf));
 
   /* ---- BSP 驱动初始化 ---- */
   st7735_init();
@@ -494,6 +512,32 @@ static void MX_RTC_Init(void)
 }
 
 /**
+  * @brief DMA Initialization Function (SPI1_TX: DMA2 Stream3 Channel3)
+  */
+static void MX_DMA_Init(void)
+{
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  hdma_spi1_tx.Instance = DMA2_Stream3;
+  hdma_spi1_tx.Init.Channel = DMA_CHANNEL_3;
+  hdma_spi1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+  hdma_spi1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+  hdma_spi1_tx.Init.MemInc = DMA_MINC_ENABLE;
+  hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+  hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+  hdma_spi1_tx.Init.Mode = DMA_NORMAL;
+  hdma_spi1_tx.Init.Priority = DMA_PRIORITY_HIGH;
+  HAL_DMA_Init(&hdma_spi1_tx);
+
+  /* 关联 DMA handle 到 SPI1 */
+  __HAL_LINKDMA(&hspi1, hdmatx, hdma_spi1_tx);
+
+  /* 配置 DMA2_Stream3 中断 */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
+}
+
+/**
   * @brief SPI1 Initialization Function
   * @param None
   * @retval None
@@ -516,7 +560,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;   /* 42/4=10.5MHz, ST7735 max~15MHz */
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;   /* APB2=84MHz, 84/8=10.5MHz, ST7735 max~15MHz */
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -794,6 +838,27 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 2 */
 
+}
+
+/**
+  * @brief USART2 Initialization Function (ESP32 天气数据接收)
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_RX;       /* RX only — ESP32 sends, STM32 listens */
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
