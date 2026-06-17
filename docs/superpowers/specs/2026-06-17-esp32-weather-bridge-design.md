@@ -218,28 +218,27 @@ void weather_frame_parse(const char *frame) {
 
 #### 并发安全说明
 
-当前架构下 `weather_frame_parse()` 和 `temp_mode_render()` 都在 `StartTaskBG` 同一任务中顺序执行，不会被抢占，**无实际竞态**。但如果将来有人把渲染移到其他任务（如恢复 TaskDisplay），下面两个措施保证安全：
+当前 `weather_frame_parse()` 和 `temp_mode_render()` 均在 `StartTaskBG` **同一任务**中顺序执行，不会被抢占，**无实际竞态，无需任何锁**。若将来将渲染移至独立任务（如恢复 TaskDisplay），需采取以下措施：
 
 ```c
-// 写入端: 先在栈上构造完整数据，再一次写入 g_weather
-//        → 不存在"字符串拷一半被读到"的窗口
-weather_data_t tmp;
-tmp.temperature      = parsed_temp;
-tmp.humidity         = (uint8_t)parsed_hum;
-strncpy(tmp.description, parsed_desc, 31);
-tmp.description[31]  = '\0';
-tmp.last_update_tick = HAL_GetTick();
-tmp.valid            = true;
-g_weather = tmp;                    // 结构体赋值，ARMCC 生成 memcpy，一次性
+// 写入端：临界区保护（weather_data_t ~48 字节，ARMCC 编译为 memcpy 循环，非原子）
+taskENTER_CRITICAL();
+g_weather = tmp;
+taskEXIT_CRITICAL();
 
-// 读取端: 进入渲染函数时立即快照到栈
+// 读取端：进渲染函数时快照到栈，临界区内只读一次
 void temp_mode_render(void) {
-    weather_data_t local = g_weather;  // 只读一次，后续全部用 local
-    // ... 使用 local.temperature, local.humidity, local.description ...
+    weather_data_t local;
+    taskENTER_CRITICAL();
+    local = g_weather;   // 快照到栈
+    taskEXIT_CRITICAL();
+    // 后续全部用 local，不访问 g_weather
 }
 ```
 
-> 无需互斥锁或关中断。即使将来写入/读取在不同任务中，`memcpy` 的结构体拷贝也是单条 ARM 指令（LDM/STM 块传输），不存在半字撕裂。
+> 追加 `taskENTER_CRITICAL()` 即可，无需创建单独的互斥锁。临界区极短（一次 memcpy），不影响中断延迟。
+
+**当前无需实现上述临界区**——读写同任务，无抢占。此处仅作为未来并行化的设计留痕。
 
 ### 4.4 数据结构
 
@@ -391,7 +390,7 @@ if (HAL_GetTick() - last_device_info_render > 10000) {
 | 天气描述含空格 | ESP32 端发前空格→`_`，STM32 收后 `_`→空格 |
 | ARMCC 不支持 `sscanf %hhu` | 用 `%d` 接收 humidity，收到后转 `uint8_t` |
 | 帧头缺失 | 只处理 `$` 开头的帧，非 `$` 开头直接丢弃 |
-| 并发读写 `g_weather` | 写入端栈上构造→一次性赋值；读取端进函数即快照到栈（见4.3节） |
+| 并发读写 `g_weather` | 当前同任务无竞态；若未来并行化：写入端/读取端各加 `taskENTER_CRITICAL` |
 
 ---
 
