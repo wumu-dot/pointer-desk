@@ -1,12 +1,28 @@
 # OV-Watch 交接文档
 
-> 日期：2026-06-17  
-> 版本：v1.3.0-weather-bridge  
+> 日期：2026-06-19  
+> 版本：v1.4.1 — 项目结构清理  
 > 硬件：鹿小班 LXB407ZG-P1（STM32F407ZGT6 最小系统板） + 1.8寸 TFT ST7735S + W25Q64 Flash（已接） + ESP32 天气桥接（已通）
 
 ---
 
-## ⚠️ 烧录方式：仅 ISP 串口下载
+## 已清理的目录（勿重建）
+
+> 2026-06-19 清理，防止 AI/新人困惑。
+
+| 目录 | 原因 |
+|------|------|
+| `firmware/EWARM/` | IAR 项目文件，本项目使用 Keil MDK |
+| `firmware/Middlewares/` | FreeRTOS 源码副本，由 Keil RTE Pack 管理，无需本地副本 |
+| `tools/` | 空目录，无实际内容 |
+| `docs/.claude/` | `settings.local.json` 已迁移至 `.claude/`（项目根目录），确保 Claude Code 能读取 |
+| `firmware/.claude/` | 旧版权限配置残留，项目根 `.claude/` 已统一管理 |
+| `START_HERE.md` | 过时（"15 个 .c 文件待编写"），内容已由 README.md + HANDOFF.md 覆盖 |
+| `README.md` | 重写为精简版，移除已删除文件引用和过时引脚信息 |
+
+### 历史文档说明
+
+`docs/superpowers/specs/2026-06-10-ov-watch-design.md` 和 `docs/superpowers/plans/2026-06-12-ov-watch-firmware.md` 是历史快照，其中引用的 `tools/`、`Middlewares/Third_Party/LittleFS/` 等目录已于 2026-06-19 清理。这些文档保留原貌供追溯，**当前目录结构以本文件和 `README.md` 为准**。## ⚠️ 烧录方式：仅 ISP 串口下载
 
 > **这块板子没有 ST-Link、没有 SWD、没有 J-Link。只能用 ISP 串口烧录。**
 
@@ -40,10 +56,13 @@
 | W25Q64 Flash | ✅ 已接，JEDEC=0xEF4017，fs_mgr已挂载 |
 | **ESP32 天气桥接** | ✅ **已打通** — ESP32每60s发天气帧，STM32 USART2 DMA接收，RTC自动校准 |
 | **temp_mode 天气显示** | ✅ 显示温度+湿度+天气描述+时间（数据来自ESP32 open-meteo API） |
+| **fs_mgr 配置存储** | ✅ **刚修复** — 原地覆写替代强制追加，Flash 空间不再泄漏 |
 | 按键 | PA15 单键（短按切模式、长按动作） |
 | 电机/A4988 | 已买42步进电机+驱动板，**未接（缺12V适配器）** |
-| SHT30 温度 | 已买未到，**预留 PF0/PF1** |
+| SHT30 温度 | 已买未到，驱动程序完整（temp_sensor.c），**插上即用** |
 | ESP32 OLED | 已禁用（ESP32→STM32 UART桥接模式），原OLED项目改为纯数据源 |
+| **4功能计划** | ✅ 计划就绪 — 湿度计/日出日落环/番茄钟/呼吸引导 |
+| **CodeGraph** | ✅ 已初始化 — `.codegraph/codegraph.db` (43MB)，查代码优先用它 |
 
 ---
 
@@ -69,6 +88,15 @@ ESP32 (C:\Projects\weather_clock\)        STM32 (firmware\)
 5. BG任务每50ms调用 `weather_bridge_poll_dma()` → 找`$`帧头 → 等`\n` → 校验和验证 → `sscanf` 解析 → `rtc_drv_set_datetime()` + 更新 `g_weather`
 6. `temp_mode_render()` 从 `g_weather` 读取显示
 
+### 待扩展：日出日落字段
+
+ESP32 帧格式将向后兼容扩展（见 4 功能计划）：
+```
+旧: $2026-06-17 23:25:26|24.0|77|Cloudy|D0
+新: $2026-06-17 23:25:26|24.0|77|Cloudy|06:15|18:42|E2
+                                             日出   日落  CS
+```
+
 ---
 
 ## 单键操作
@@ -80,6 +108,16 @@ ESP32 (C:\Projects\weather_clock\)        STM32 (firmware\)
 | 长按(Temp) | 切换天气主页 ↔ 设备信息页（ESP32连接状态、STM32 ADC等） |
 | 长按(Timer) | 开始/暂停/重置倒计时 |
 | 长按(Settings) | 退出（自动保存到Flash） |
+
+### 待实现：子页轮转
+
+4 功能计划实现后，每个模式内部将支持长按轮转子页：
+
+```
+Clock:  主页 ──长按──► 日出日落环 ──长按──► 回到主页
+Temp:   天气 ──长按──► 湿度计 ──长按──► 双温对比 ──长按──► 设备信息
+Timer:  倒计时 ──长按──► 番茄钟 ──长按──► 呼吸引导
+```
 
 ---
 
@@ -93,7 +131,7 @@ main.c
 ├─ MX_USART2_UART_Init()   USART2 @ 115200 (PD6=RX, PD5=ANALOG关断)
 ├─ MX_RTC_Init()     首次上电注入 __DATE__ __TIME__（LSI时钟源，漂移由ESP32 NTP校准）
 ├─ HAL_UART_Receive_DMA()  启动USART2 DMA循环接收
-├─ BSP 初始化         st7735, button, a4988, temp, fs_mgr
+├─ BSP 初始化         st7735, button, a4988, temp_sensor, fs_mgr
 └─ FreeRTOS 启动
     ├─ TaskButton (10ms)   按键扫描→事件队列
     ├─ TaskBG (50ms)       UART DMA轮询 + 按键事件 + render→dirty rect flush
@@ -117,7 +155,7 @@ main.c
 | | SCK | PB10 | 下排 B10 |
 | | MOSI | PC3 | 下排 C3 |
 | | MISO | PC2 | 下排 C2 |
-| **SHT30** (预留) | SCL | PF1 | 上排 F1 |
+| **SHT30** (代码就绪，传感器未到) | SCL | PF1 | 上排 F1 |
 | | SDA | PF0 | 上排 F0 |
 | **A4988 电机** | STEP | PA0 | 下排 A0 |
 | | DIR | PA1 | 下排 A1 |
@@ -152,26 +190,6 @@ ESP32 VIN(5V)    ──► 核心板 5V 排针
 
 ---
 
-## 板子引脚分区速查（LXB407ZG-P1 丝印）
-
-```
-左侧独立排针（从上到下）：
-  3V3（独立，可给传感器供电）
-  RST
-  TXD（PA9）
-  RXD（PA10）
-
-上排（左→右）：
-  5V 3V3 A11 G6 G8 C7 C9 A9 A8 C11 D0 D2 D4 D6 G9 G11 B3 B5 B7 B9 E0 G13 E2 E4 E6 C13 F1 F3 F5
-  5V 3V3 A12 G5 G7 C6 C8 A10 C12 D1 D3 D5 D7 G10 G15 B4 B6 B8 E1 G14 G12 E3 E5 C15 A15 F0 F2 F4 F6
-
-下排（左→右）：
-  GND GND D13 D11 D9 B15 B13 G4 B10 E14 E12 E10 E7 G0 F12 B2 A7 A5 A3 B0 F13 A2 A0 F8
-  GND GND D12 D10 D8 B14 B12 D5 G3 B11 E15 E13 E11 E9 G1 F15 F11 C4 A6 A4 C5 B1 F14 A1 F7 F9 C3 C2
-```
-
----
-
 ## SPI 时钟树
 
 ```
@@ -186,18 +204,6 @@ SPI2 (Flash) = 42 ÷ 16 = 2.625MHz ✅
 
 ---
 
-## 面包板接线方案
-
-核心板放桌面，用**母对母杜邦线**从排针扣出信号到面包板孔位。
-
-```
-核心板上排 3V3 ────► 面包板 +轨  ← 所有外设3.3V从这里取
-核心板下排 GND ────► 面包板 -轨  ← 所有外设GND + 适配器GND
-核心板上排 5V  ────► ESP32 VIN（预留）
-```
-
----
-
 ## 已知问题（按优先级）
 
 | # | 优先级 | 问题 | 根因 | 解决 |
@@ -205,7 +211,7 @@ SPI2 (Flash) = 42 ÷ 16 = 2.625MHz ✅
 | 1 | P0 | TFT 闪烁 | ST7735S TE引脚未引出→无硬件同步 | 飞线TE或提高帧率 |
 | 2 | P1 | Timer 模式黑屏 | 单键适配时疑似DMA旧bug污染，待复测 | Keil重开重编译烧录后再验证 |
 | 3 | P1 | 电机未验证 | A4988缺12V适配器 | 买12V 2A适配器+100µF电容 |
-| 4 | P1 | SHT30未接 | 已买未到，回退内部ADC | 到货后接PF0/PF1 |
+| 4 | P1 | SHT30未接 | 已买未到，驱动代码完整 | 到货后接PF0/PF1，无需改固件 |
 | 5 | P2 | settings只读 | 单键无方向键 | 简化即可 |
 | 6 | P2 | timer无法调时长 | 单键操作限制 | 双击/长按组合 |
 | 7 | P3 | 4个编译Warning | em dash + 枚举混用 | 无害，可后续修 |
@@ -222,31 +228,36 @@ SPI2 (Flash) = 42 ÷ 16 = 2.625MHz ✅
 | ✅ | DMA计数方向反 | `__HAL_DMA_GET_COUNTER` 返回NDTR(↓)，已修正为 `(buf-ndtr)%buf` |
 | ✅ | sscanf吃校验和 | `last_pipe[0]='\0'` 截断，天气描述不再含\|D5 |
 | ✅ | g_display_task_h=NULL崩溃 | 4处 `xTaskNotifyGive` 加 `if (g_display_task_h)` 判空 |
+| ✅ | **fs_config_save Flash 空间泄漏** | 每次保存强制追加→改为原地覆写。size≤旧则同址写入不推进偏移，LOG 追加 `[in-place]`/`[new]`/`[grew]` 标记。2026-06-17 提交 06d7917 |
 
 ---
 
-## 新增文件索引（天气桥接）
+## 本轮新增文件
 
-| 文件 | 作用 |
-|------|------|
-| `App/weather_bridge.h` | 帧解析接口声明 |
-| `App/weather_bridge.c` | DMA轮询 + weather_frame_parse (校验和+sscanf+RTC写入) |
-| `C:/Projects/weather_clock/main/tasks/uart_bridge_task.h` | ESP32 UART发送任务声明 |
-| `C:/Projects/weather_clock/main/tasks/uart_bridge_task.c` | ESP32 UART发送任务实现 (每60s格式化+校验和+发送) |
+| 文件 | 作用 | 日期 |
+|------|------|------|
+| `App/weather_bridge.h` | 帧解析接口声明 | 06-17 |
+| `App/weather_bridge.c` | DMA轮询 + weather_frame_parse (校验和+sscanf+RTC写入) | 06-17 |
+| `docs/superpowers/plans/2026-06-17-motor-4-features.md` | 4 功能实现计划（湿度/日出日落/番茄钟/呼吸引导） | 06-17 |
+| `BUGS.md` | Bug 清单（8 个已知问题 + 已修复记录） | 06-17 |
+| `HANDOFF.md` | 本文档 | 06-17 |
+| `CLAUDE.md` | 项目 AI 行为规则 + Skill 调用表 | 06-17 |
 
-### 修改的文件（本轮）
+### 本轮修改的文件
 
 | 文件 | 改动 |
 |------|------|
+| `Middleware/fs/fs_mgr.c` | **fs_config_save() 原地覆写修复** — 核心改动 |
+| `Core/Inc/app_config.h` | +weather_data_t 结构体 + 番茄钟/呼吸配置宏 |
 | `Core/Src/main.c` | +MX_USART2_UART_Init, +DMA缓冲变量, +g_weather, +HAL_UART_Receive_DMA |
 | `Core/Inc/main.h` | +extern huart2, hdma_usart2_rx |
-| `Core/Inc/app_config.h` | +weather_data_t 结构体 |
 | `Core/Inc/pin_config.h` | +ESP32 UART宏 |
 | `Core/Src/stm32f4xx_hal_msp.c` | +USART2_MspInit (PD6=AF7, PD5=ANALOG, DMA1_S5_Ch4) |
 | `Core/Src/stm32f4xx_it.c` | +DMA1_Stream5_IRQHandler |
-| `Core/Src/freertos.c` | +weather_bridge_poll_dma() 调用, +include weather_bridge.h |
+| `Core/Src/freertos.c` | +weather_bridge_poll_dma() 调用 |
 | `App/modes/temp_mode.c` | 完全重写：天气主页 + 设备信息页 |
-| `.claude/scripts/check-firmware.sh` | 更新 temp_mode 检查项为 last_rendered |
+| `App/modes/timer_mode.c` | 倒计时逻辑完善 |
+| `.claude/scripts/check-firmware.sh` | 更新 temp_mode 检查项 |
 
 ---
 
@@ -273,10 +284,6 @@ idf.py -j2 build flash monitor
 | WiFi/天气 | 原有逻辑不变 |
 | uart_bridge_task | 每60秒发一帧，栈4KB，优先级5 |
 
-### OLED 已被禁用
-
-`display_task` 已注释、`oled_init()` 已注释、`g_display_task_h=NULL`，`xTaskNotifyGive(NULL)` 均有判空保护。看门狗不再监控 display。
-
 ### 烧录注意事项
 
 ```
@@ -298,6 +305,10 @@ idf.py -j2 build flash monitor
 - DMA 启动：`weather_bridge DMA poll started`
 - 天气有效：`g_weather.valid=1` → temp_mode 显示天气主页
 - 模式切换：`CLOCK: enter` / `TEMP: enter`
+- 配置保存（修复后）：`fs_config_save 'brightness': 1 bytes @ 0x...  [in-place]`
+  - `[new]` = 新 key 首次写入
+  - `[in-place]` = 原地覆写（正常，地址不变）
+  - `[grew]` = 数据变大，追加到队尾
 - 闪烁测试：按住RST→画面静止=TFT正常；松开→SPI写GRAM撕裂
 
 ---
@@ -306,7 +317,8 @@ idf.py -j2 build flash monitor
 
 | 文档 | 路径 |
 |------|------|
-| Bug清单 | `BUGS.md` |
+| Bug清单 | `docs/bugs/INDEX.md`（一 Bug 一文件，共 8 个未修复 + 8 个已修复） |
+| 4功能实现计划 | `docs/superpowers/plans/2026-06-17-motor-4-features.md` |
 | 天气桥接设计规范 | `docs/superpowers/specs/2026-06-17-esp32-weather-bridge-design.md` |
 | 天气桥接实现计划 | `docs/superpowers/plans/2026-06-17-esp32-weather-bridge.md` |
 | 编译修复 | `docs/superpowers/compile-fixes.md` |
@@ -314,6 +326,20 @@ idf.py -j2 build flash monitor
 | 项目设计文档 | `docs/superpowers/specs/2026-06-10-ov-watch-design.md` |
 | 回归检查 | `.claude/scripts/check-firmware.sh` (18项) |
 | CLAUDE.md | 项目根目录（AI行为规则+Skill调用表） |
+| AI 开发规范三件套 | `C:\Users\wumu2\OneDrive\桌面\agent\al开发项目规范\` |
 | ESP32项目 | `C:\Projects\weather_clock\` |
-| 参考项目 | `C:\Users\wumu2\OneDrive\桌面\ST7789_ref\` |
 | ST7735S数据手册 | `C:\Users\wumu2\OneDrive\桌面\stm32F407ZGT6\ST7735S_datasheet.pdf` |
+| CodeGraph 索引 | `.codegraph/codegraph.db` (43MB，已初始化) |
+
+---
+
+## SHT30 驱动状态
+
+> **代码完整，传感器未到。插上不用改固件。**
+
+`sht30_init()` 自动探测 I2C2 总线地址 0x44：
+- 检测到 → `g_source = TEMP_SRC_SHT30` → `temp_sensor_read()` 返回 ±0.3°C 精度温湿度
+- 未检测到 → 回退 `temp_adc_read_celsius()` (内部 ADC, ±5°C)
+- 上层（temp_mode 双温对比页）根据 `data.source` 区分显示 "SHT30" 或 "None"
+
+接线：`PF0=SDA, PF1=SCL`（I2C2），3.3V 供电从面包板 +轨取。

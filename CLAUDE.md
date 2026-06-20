@@ -1,120 +1,109 @@
-# OV-Watch AI 开发规范
+# 项目地图
 
-> 每次 Claude Code 打开此项目时自动加载。修改保存后下次对话生效。
-
----
-
-## 核心原则
-
-```
-正确性  >  速度
-可读性  >  巧妙
-可维护性 > 极致优化
-小改动  > 大重构
-显式    > 隐式
-```
-
-- 不要猜测需求
-- 不要创造不存在的接口
-- 不要修改无关代码
-- 不要重构用户未要求的内容
-- 发现问题先分析再修改
+> 本文档始终加载到 AI 上下文。保持精简（< 1000 Token），只写"是什么+去哪查"，不做完整手册。
 
 ---
 
-## 任务执行流程
+## 技术栈
 
-```
-分析问题 → 制定计划 → 等待确认 → 实施修改 → 验证结果 → 输出总结
-```
-
-**关键约束：** 未经用户确认，不得自行扩大修改范围。
+STM32F407ZGT6 / Keil MDK V5 + ARMCC V5 / FreeRTOS (CMSIS-RTOS v2) / ST7735S TFT / W25Q64 Flash / ESP32 (ESP-IDF v5.4) / C
 
 ---
 
-## 修改代码前必须
+## 目录速查
 
-1. 阅读完整文件
-2. 阅读相关依赖
-3. 分析调用链
-4. 再进行修改
-
-**禁止：**
-- 只看局部代码直接改
-- 改 A 炸 B 影响 C
-
-**原则：**
-- 做最小可能的改动
-- 不重构无关代码
-- 保持向后兼容
-- 永不删除现有功能
+| 目录 | 职责 |
+|------|------|
+| `firmware/Core/` | STM32 HAL 层（main.c, 中断, CubeMX 配置） |
+| `firmware/App/` | 应用层（weather_bridge, mode_manager, 4 模式） |
+| `firmware/Drivers/BSP/` | 板级驱动（st7735, a4988, temp_sensor, w25q64） |
+| `firmware/Middleware/` | 中间件（fs_mgr Flash 存储, gui 绘图, pointer_engine 指针引擎） |
+| `firmware/MDK-ARM/` | Keil 项目文件 + 编译产物（.hex 在此） |
+| `.claude/scripts/` | 回归检查脚本 |
+| `docs/superpowers/` | 设计文档 + 实现计划 |
 
 ---
 
-## 代码质量
+## 入口 & 关键文件
 
-- 单一职责函数（< 50 行）
-- 避免深层嵌套（> 4 层）
-- 无硬编码值（用宏或配置）
-- 错误显式处理
-- C 语言：函数前加注释说明功能、参数、返回值
+| 文件 | 职责 |
+|------|------|
+| `firmware/Core/Src/main.c` | 固件入口，外设初始化，FreeRTOS 启动 |
+| `firmware/Core/Src/stm32f4xx_hal_msp.c` | CubeMX 生成的引脚配置（**改引脚前必读**） |
+| `firmware/Core/Inc/pin_config.h` | 所有引脚宏定义 |
+| `firmware/Core/Inc/app_config.h` | 应用配置宏 + weather_data_t 结构体 |
+| `firmware/App/weather_bridge.c` | ESP32 UART DMA 接收 + 帧解析 |
+| `firmware/App/mode_manager.c` | 4 模式状态机 + 按键分发 |
+| `firmware/App/modes/clock_mode.c` | 时钟模式 |
+| `firmware/App/modes/temp_mode.c` | 天气/温度模式 |
+| `firmware/App/modes/timer_mode.c` | 倒计时模式 |
+| `firmware/App/modes/settings_mode.c` | 设置模式 |
+| `firmware/Middleware/fs/fs_mgr.c` | Flash KV 存储 |
+| `firmware/Middleware/gui/gui.c` | 轻量GUI（脏矩形、进度环、文本） |
+| `firmware/Middleware/pointer/pointer_engine.c` | 指针引擎（角度映射、平滑插值） |
+| `firmware/Drivers/BSP/motor/a4988.c` | A4988 步进电机驱动（TIM2 PWM） |
+| `firmware/Drivers/BSP/sensor/temp_sensor.c` | 温度传感器抽象（SHT30 + ADC 回退） |
+| `C:\Projects\weather_clock\` | ESP32 天气数据源项目 |
+| `C:\Projects\weather_clock\main\tasks\uart_bridge_task.c` | ESP32 UART 发送任务 |
 
 ---
 
-## Git 提交格式
-
-```
-feat: 新功能
-fix:  Bug 修复
-refactor: 重构
-docs: 文档
-chore: 杂务
-```
-
-示例：`fix(tft): spi clock corrected from 21MHz to 10.5MHz`
-
----
-
-## OV-Watch 项目专属规则
+## 约束 & 禁止事项
 
 ### 编译环境
 - IDE：Keil MDK V5 + ARMCC V5
+- ARMCC V5 **不支持** `0b` 二进制字面量、C++ 风格注释混用
+- 偶发编译内存溢出：关 Keil → 重开 → Rebuild
 - 编译完运行 `bash .claude/scripts/check-firmware.sh` 验证 18 项检查
-- ARMCC V5 不支持 `0b` 二进制字面量、不支持 C++ 风格注释混用
 
 ### 烧录方式
 - **仅 ISP 串口下载**，无 ST-Link/SWD
-- 烧录引脚和调试串口共用 USART1 (PA9/PA10)
+- 烧录和调试共用 USART1 (PA9/PA10)，烧录时无法看日志
 
-### 引脚修改
-- **修改任何引脚前必须先看 `Core/Src/stm32f4xx_hal_msp.c` 确认 CubeMX 实际配置**
+### 引脚规则
+- **修改任何引脚前必须先看 `Core/Src/stm32f4xx_hal_msp.c`**
 - `pin_config.h` 的宏值必须与 `hal_msp.c` 一致
-- 历史上5个引脚因未校验 CubeMX 而写错
+- 历史上 5 个引脚因未校验 CubeMX 而写错
 
 ### 外设总线
-- SPI1 (TFT)：APB2 84MHz，分频后 ≤15MHz
-- SPI2 (Flash)：APB1 42MHz
+- SPI1 (TFT)：APB2 84MHz ÷ 8 = 10.5MHz
+- SPI2 (Flash)：APB1 42MHz ÷ 16 = 2.625MHz
 - I2C2 (SHT30)：PF0/PF1，非 PB10/PB11
 
-### 相关文档
-- 完整交接：`HANDOFF.md`
-- Bug 清单：`BUGS.md`
-- 回归检查：`.claude/scripts/check-firmware.sh`
+### 代码原则
+- 做最小可能的改动，不重构无关代码
+- 保持向后兼容，永不删除现有功能
+- 函数前加注释说明功能、参数、返回值
 
-### Skill 调用场景
+---
 
-| 触发条件 | 调用 Skill |
-|----------|-----------|
-| 实现新功能/多文件改动前 | `brainstorming` → 讨论设计，确认后再动手 |
-| 设计确定后要写计划 | `writing-plans` → 生成分步实现计划 |
-| 计划确定后要写代码 | `subagent-driven-development` 或 `executing-plans` |
-| 遇到 Bug/测试失败 | `systematic-debugging` → 系统化排查，不要直接猜 |
-| 写完代码/修完 Bug | `verification-before-completion` → 编译+回归检查，确认通过再声称完成 |
-| 开发分支写完 | `finishing-a-development-branch` → 合并/PR/清理 |
-| 用户说"提交代码" | `commit-commands:commit` |
-| 用户说"提交并推送" | `commit-commands:commit-push-pr` |
-| 收到别人代码审查意见 | `receiving-code-review` → 技术评估后再改 |
-| 要审查当前改动 | `code-review` → 审查 bugs/简化/效率 |
-| 开始新功能需要隔离环境 | `using-git-worktrees` |
-| 要写测试 | `test-driven-development` |
-| 依赖安全审计 | `dependency-audit` |
+## 规范索引
+
+> 当你需要执行以下操作时，用 `Read` 工具按路径读取对应章节，不要凭记忆猜测。
+
+| 场景 | 读取命令 |
+|------|---------|
+| 开始改代码 | `Read("CLAUDE.md")` — 本文档（约束 & 禁止事项） |
+| 实现新功能/多文件改动 | 调 `brainstorming` Skill 讨论设计 |
+| 写实现计划 | 调 `writing-plans` Skill |
+| 遇到 Bug | 调 `systematic-debugging` Skill |
+| 写完代码/修完 Bug 后验证 | 调 `verification-before-completion` Skill |
+| Git 提交 | 调 `commit-commands:commit` Skill |
+| 提交并推送 | 调 `commit-commands:commit-push-pr` Skill |
+| 修复Bug后记录 | `Read("docs/development-standards.md", offset=Bug记录规范章节)` |
+| 查项目全貌/调试帮助 | `Read("HANDOFF.md")` |
+| 查已知 Bug | `Read("docs/bugs/INDEX.md")` 再按需读具体文件 |
+| 查 4 功能实施计划 | `Read("docs/superpowers/plans/2026-06-17-motor-4-features.md")` |
+| 查 ESP32 端架构 | `Read("C:\Projects\weather_clock\README.md")` |
+
+---
+
+## 外部依赖
+
+- ESP32 项目：`C:\Projects\weather_clock\`（ESP-IDF v5.4）
+- 外部 API：open-meteo（ESP32 端，免费天气数据）
+- 数据手册：`C:\Users\wumu2\OneDrive\桌面\stm32F407ZGT6\`
+  - `ST7735S_datasheet.pdf` — TFT 液晶驱动
+  - `A4988_datasheet.pdf` — 步进电机驱动 (Allegro, Rev.8, 2022)
+- 回归检查：`.claude/scripts/check-firmware.sh`（18 项）
+- Ai 开发规范：`C:\Users\wumu2\OneDrive\桌面\agent\al开发项目规范\`
