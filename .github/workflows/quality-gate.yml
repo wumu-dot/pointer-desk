@@ -1,0 +1,136 @@
+name: Quality Gate
+
+on:
+  push:
+    paths:
+      - 'firmware/**/*.c'
+      - 'firmware/**/*.h'
+      - '.claude/scripts/**'
+
+jobs:
+
+  # === Job 1: 固件静态检查 (18项回归) ===
+  static-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run firmware static checks
+        run: bash .claude/scripts/check-firmware.sh
+
+  # === Job 2: 硬编码密钥扫描 ===
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "=== Hardcoded Secret Scan ==="
+          # 只扫项目代码，排除 vendor (FreeRTOS/CMSIS/HAL)
+          SCAN_DIRS="firmware/App firmware/Core firmware/Middleware/fs firmware/Middleware/gui firmware/Middleware/pointer firmware/Drivers/BSP"
+          HITS=$(grep -rn \
+            -e 'sk-[a-zA-Z0-9]\{16,\}' \
+            -e '[aA][pP][iI][_-]\?[kK][eE][yY].*=.*["'"'"']\{1,\}[a-zA-Z0-9_]\{8,\}' \
+            -e '[pP][aA][sS][sS][wW][oO][rR][dD].*=.*["'"'"']\{1,\}[a-zA-Z0-9_]\{4,\}' \
+            -e '[tT][oO][kK][eE][nN].*=.*["'"'"']\{1,\}[a-zA-Z0-9_]\{8,\}' \
+            --include='*.c' --include='*.h' \
+            $SCAN_DIRS 2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "=== FAIL: Hardcoded secrets found! ==="
+            echo "$HITS"
+            echo ""
+            echo "Move secrets to environment variables or config files."
+            exit 1
+          else
+            echo "=== PASS: No hardcoded secrets in project code ==="
+          fi
+
+  # === Job 3: 危险函数扫描 ===
+  dangerous-funcs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for dangerous functions
+        run: |
+          echo "=== Dangerous Function Scan ==="
+          # 只扫项目代码，排除 vendor (FreeRTOS/CMSIS/HAL/DAP)
+          SCAN_DIRS="firmware/App firmware/Core firmware/Middleware/fs firmware/Middleware/gui firmware/Middleware/pointer firmware/Drivers/BSP"
+          FAIL=0
+
+          # sprintf without 'n' (exclude snprintf)
+          RAW=$(grep -rn '\bsprintf\b' --include='*.c' --include='*.h' $SCAN_DIRS 2>/dev/null | grep -v 'snprintf' || true)
+          if [ -n "$RAW" ]; then
+            echo "  FAIL: Raw sprintf found (use snprintf instead):"
+            echo "$RAW"
+            FAIL=1
+          fi
+
+          # strcpy (exclude strncpy)
+          RAW=$(grep -rn '\bstrcpy\b' --include='*.c' --include='*.h' $SCAN_DIRS 2>/dev/null | grep -v 'strncpy' || true)
+          if [ -n "$RAW" ]; then
+            echo "  FAIL: strcpy found (use strncpy instead):"
+            echo "$RAW"
+            FAIL=1
+          fi
+
+          # strcat (exclude strncat)
+          RAW=$(grep -rn '\bstrcat\b' --include='*.c' --include='*.h' $SCAN_DIRS 2>/dev/null | grep -v 'strncat' || true)
+          if [ -n "$RAW" ]; then
+            echo "  FAIL: strcat found (use strncat instead):"
+            echo "$RAW"
+            FAIL=1
+          fi
+
+          # gets() function call only (not the word in comments)
+          RAW=$(grep -rn '\bgets\s*(' --include='*.c' --include='*.h' $SCAN_DIRS 2>/dev/null || true)
+          if [ -n "$RAW" ]; then
+            echo "  FAIL: gets() found (use fgets instead):"
+            echo "$RAW"
+            FAIL=1
+          fi
+
+          # scanf() function call only
+          RAW=$(grep -rn '\bscanf\s*(' --include='*.c' --include='*.h' $SCAN_DIRS 2>/dev/null || true)
+          if [ -n "$RAW" ]; then
+            echo "  FAIL: scanf() found (use fgets+sscanf instead):"
+            echo "$RAW"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" -eq 0 ]; then
+            echo "=== PASS: No dangerous functions in project code ==="
+          else
+            exit 1
+          fi
+
+  # === Job 4: 文件行数检查 ===
+  line-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check file line counts
+        run: |
+          echo "=== File Line Count Check (max 800 lines) ==="
+          MAX=800
+          FAIL=0
+          # 只扫项目代码；排除 main.c (CubeMX生成) + vendor
+          for f in $(find firmware/App firmware/Core firmware/Middleware/fs \
+                          firmware/Middleware/gui firmware/Middleware/pointer \
+                          firmware/Drivers/BSP -name '*.c' -o -name '*.h' 2>/dev/null); do
+            # main.c 由 CubeMX 生成，不计入行数限制
+            case "$f" in */main.c) continue ;; esac
+            LINES=$(wc -l < "$f")
+            if [ "$LINES" -gt "$MAX" ]; then
+              echo "  FAIL: $f ($LINES lines, max $MAX)"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+          if [ "$FAIL" -gt 0 ]; then
+            echo "=== $FAIL file(s) exceed $MAX lines ==="
+            exit 1
+          else
+            echo "=== PASS: All project files <= $MAX lines ==="
+          fi
