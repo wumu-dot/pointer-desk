@@ -250,6 +250,23 @@ void pointer_set_page(uint8_t page, uint8_t total_pages)
 }
 
 /**
+ * @brief Humidity gauge mode.
+ *
+ *        Maps 0-100 %RH onto a 300-degree arc from 30 deg to 330 deg.
+ *        Percent values are clamped to [0, 100].
+ *
+ *        angle = 30 + percent / 100 * 300
+ */
+void pointer_set_humidity(uint8_t percent)
+{
+    if (percent > 100) percent = 100;
+
+    float angle = 30.0f + (float)percent / 100.0f * 300.0f;
+
+    pointer_set_target(angle, POINTER_MOVE_NORMAL);
+}
+
+/**
  * @brief Per-tick update — call every 50 ms (POINTER_UPDATE_MS).
  *
  *        Moves current_angle toward target_angle along the shortest angular path

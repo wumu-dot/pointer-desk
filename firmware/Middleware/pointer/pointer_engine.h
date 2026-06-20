@@ -60,6 +60,7 @@ void pointer_set_clock_24h(uint8_t hour, uint8_t minute);       /* 24h 时钟 */
 void pointer_set_temperature(float temp_c, bool fahrenheit);    /* 温度计 */
 void pointer_set_timer(uint32_t remaining_sec, uint32_t total_sec); /* 计时器 */
 void pointer_set_page(uint8_t page, uint8_t total_pages);      /* 设置菜单页码 */
+void pointer_set_humidity(uint8_t percent);                    /* 湿度计 0-100% → 30°-330° */
 
 /* 每个 POINTER_UPDATE_MS 周期调用一次 (50ms)，由电机任务调用 */
 void pointer_engine_update(void);
