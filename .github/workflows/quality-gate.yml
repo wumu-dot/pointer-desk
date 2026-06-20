@@ -2,10 +2,6 @@ name: Quality Gate
 
 on:
   push:
-    paths:
-      - 'firmware/**/*.c'
-      - 'firmware/**/*.h'
-      - '.claude/scripts/**'
 
 jobs:
 
