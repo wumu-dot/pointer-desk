@@ -19,6 +19,8 @@
 | Bug ID | 标题 | 等级 | 发现 | 修复 | 文件 |
 |--------|------|------|------|------|------|
 | BUG-20260610-003 | [SHT30 温湿度传感器未接](BUG-20260610-003-sht30-missing.md) | P1 | 06-10 | 06-21 | `temp_sensor.c`（驱动已就绪），`temp_mode.c` |
+| BUG-20260621-001 | [GCC nano.specs 浮点 printf/scanf 被禁](BUG-20260621-001-gcc-nanospecs-float.md) | P1 | 06-21 | 06-22 | `Makefile` |
+| BUG-20260621-002 | [CubeMX 重新生成丢失 USART2](BUG-20260621-002-cubemx-usart2-lost.md) | P1 | 06-21 | 06-22 | `main.c`, `hal_msp.c` |
 | BUG-20260617-001 | [fs_config_save Flash 空间泄漏](BUG-20260617-001-flash-space-leak.md) | P1 | 06-17 | 06-17 | `fs_mgr.c` |
 | BUG-20260617-002 | W25Q64 Flash 实际已接（原误标为未接） | P1 | 06-10 | 06-17 | 硬件确认，非代码修复 |
 | BUG-20260616-004 | 14-31 号运行时 bug（18 个） | P1 | 06-16 | 06-16 | 多文件，详见 `docs/superpowers/runtime-bugs.md` |
