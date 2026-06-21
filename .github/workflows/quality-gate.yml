@@ -130,3 +130,25 @@ jobs:
           else
             echo "=== PASS: All project files <= $MAX lines ==="
           fi
+
+  # === Job 5: GCC 编译验证 (STM32F407) ===
+  build-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ARM GCC toolchain
+        run: |
+          sudo apt update -qq
+          sudo apt install -y -qq gcc-arm-none-eabi
+          arm-none-eabi-gcc --version
+
+      - name: Build firmware
+        run: |
+          cd firmware
+          make -j$(nproc)
+          echo "=== Build output ==="
+          ls -lh build/ov-watch.elf build/ov-watch.hex build/ov-watch.bin
+          echo ""
+          echo "=== Firmware size ==="
+          arm-none-eabi-size build/ov-watch.elf
