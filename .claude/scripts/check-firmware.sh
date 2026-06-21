@@ -31,11 +31,20 @@ check() {
 echo "=== OV-Watch Post-Edit Check ==="
 echo ""
 
-# P0: No duplicate function BODIES (forward decls on L137-140 are fine)
-# Check: all "void StartTask" lines in main.c end with ";" (declarations), not "{" (definitions)
+# P0: StartTask* implementations must live in freertos.c.
+# main.c may contain ARMCC-only stubs inside #ifndef __GNUC__ guard (GCC migration).
+# Check: any StartTask body in main.c that is NOT inside the GCC guard = FAIL.
 if grep -n "void StartTask" "$FW/Core/Src/main.c" 2>/dev/null | grep -qv ';$'; then
-    echo "  FAIL: StartTask* function bodies should NOT be in main.c"
-    errors=$((errors + 1))
+    # Bodies exist — verify they are guarded by #ifndef __GNUC__
+    # Extract the region between #ifndef __GNUC__ and #endif, then check StartTask inside it
+    HAS_GUARD=$(sed -n '/#ifndef __GNUC__/,/#endif.*__GNUC__/p' "$FW/Core/Src/main.c" 2>/dev/null | grep -c "void StartTask" || true)
+    TOTAL_BODIES=$(grep -c "void StartTask" "$FW/Core/Src/main.c" 2>/dev/null || true)
+    if [ "$HAS_GUARD" -gt 0 ] && [ "$HAS_GUARD" -ge "$TOTAL_BODIES" ]; then
+        echo "  OK:   StartTask* in main.c are inside #ifndef __GNUC__ guard (ARMCC-only stubs)"
+    else
+        echo "  FAIL: StartTask* function bodies in main.c without GCC guard!"
+        errors=$((errors + 1))
+    fi
 else
     echo "  OK:   StartTask* not duplicated (only forward declarations)"
 fi
