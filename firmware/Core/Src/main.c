@@ -146,6 +146,7 @@ static void MX_I2C2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_USART1_UART_Init(void);
+static void MX_USART2_UART_Init(void);
 void StartTaskButton(void *argument);
 void StartTaskBG(void *argument);
 void StartTaskDisplay(void *argument);
@@ -199,6 +200,7 @@ int main(void)
   MX_RTC_Init();
   MX_TIM5_Init();
   MX_USART1_UART_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   LOG("========== OV-Watch Firmware v1.0.0 ==========\r\n");
   LOG("System Core Clock: %lu MHz\r\n", SystemCoreClock / 1000000);
@@ -798,6 +800,27 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 2 */
 
+}
+
+/**
+  * @brief USART2 Initialization Function (ESP32 weather bridge RX only)
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
