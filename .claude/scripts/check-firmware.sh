@@ -81,8 +81,8 @@ check "BG task no longer sends motor targets" \
     "QueueMotorTargetsHandle.*pointer_get_current_angle" "$FW/Core/Src/freertos.c" "absent"
 
 # Render dedup in place
-check "temp_mode has render cache (last_rendered)" \
-    "last_rendered" "$FW/App/modes/temp_mode.c" "found"
+check "temp_mode has render cache (last_rendered_weather)" \
+    "last_rendered_weather" "$FW/App/modes/temp_mode.c" "found"
 
 check "timer_mode has render cache" \
     "render_cache" "$FW/App/modes/timer_mode.c" "found"
