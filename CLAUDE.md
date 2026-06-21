@@ -51,7 +51,10 @@ STM32F407ZGT6 / Keil MDK V5 + ARMCC V5 / FreeRTOS (CMSIS-RTOS v2) / ST7735S TFT 
 ## 约束 & 禁止事项
 
 ### 编译环境
-- IDE：Keil MDK V5 + ARMCC V5
+- **Keil MDK V5 + ARMCC V5**（GUI 编译，保留兼容）
+- **STM32CubeCLT (GCC)**（命令行，**推荐**）
+- 编译命令：`make -j6`（需 `C:\ST\STM32CubeCLT_1.21.0\GNU-tools-for-STM32\bin` 和 `C:\mingw64\bin` 在 PATH）
+- 一键编译+烧录：双击 `build_and_flash.bat`
 - ARMCC V5 **不支持** `0b` 二进制字面量、C++ 风格注释混用
 - 偶发编译内存溢出：关 Keil → 重开 → Rebuild
 - 编译完运行 `bash .claude/scripts/check-firmware.sh` 验证 18 项检查

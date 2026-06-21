@@ -62,8 +62,6 @@ RTC_HandleTypeDef hrtc;
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
 
-DMA_HandleTypeDef hdma_spi1_tx;
-
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
@@ -130,12 +128,14 @@ uint8_t  uart2_line_pos;
 uint32_t uart2_dma_prev;
 
 weather_data_t g_weather;
+
+/* SPI1 DMA TX handle — needed by stm32f4xx_it.c DMA2_Stream3_IRQHandler */
+DMA_HandleTypeDef hdma_spi1_tx;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_TIM2_Init(void);
@@ -146,7 +146,6 @@ static void MX_I2C2_Init(void);
 static void MX_RTC_Init(void);
 static void MX_TIM5_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_USART2_UART_Init(void);
 void StartTaskButton(void *argument);
 void StartTaskBG(void *argument);
 void StartTaskDisplay(void *argument);
@@ -190,7 +189,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_SPI1_Init();
   MX_SPI2_Init();
   MX_TIM2_Init();
@@ -201,7 +199,6 @@ int main(void)
   MX_RTC_Init();
   MX_TIM5_Init();
   MX_USART1_UART_Init();
-  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   LOG("========== OV-Watch Firmware v1.0.0 ==========\r\n");
   LOG("System Core Clock: %lu MHz\r\n", SystemCoreClock / 1000000);
@@ -476,65 +473,28 @@ static void MX_RTC_Init(void)
 
   /** Initialize RTC and set the Time and Date
   */
-  if (need_set_time) {
-    /* 从编译器 __DATE__ __TIME__ 解析当前时间作为默认基准 */
-    /* __DATE__ = "Jun 15 2026"  __TIME__ = "19:55:30" */
-    static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
-    const char *d = __DATE__;
-    const char *t = __TIME__;
-    uint8_t m_idx;
-    for (m_idx = 0; m_idx < 12; m_idx++) {
-        if (d[0] == months[m_idx*3] && d[1] == months[m_idx*3+1] && d[2] == months[m_idx*3+2]) break;
-    }
-    sTime.Hours   = (uint8_t)((t[0]-'0')*10 + (t[1]-'0'));
-    sTime.Minutes = (uint8_t)((t[3]-'0')*10 + (t[4]-'0'));
-    sTime.Seconds = (uint8_t)((t[6]-'0')*10 + (t[7]-'0'));
-    sDate.WeekDay = RTC_WEEKDAY_MONDAY;
-    sDate.Month   = (uint8_t)(m_idx + 1);
-    sDate.Date    = (uint8_t)((d[4]==' ' ? 0 : (d[4]-'0')*10) + (d[5]-'0'));
-    sDate.Year    = (uint8_t)((d[9]-'0')*10 + (d[10]-'0'));
-    sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-    sTime.StoreOperation = RTC_STOREOPERATION_SET;
-    if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
-    {
-      Error_Handler();
-    }
-    if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
-    {
-      Error_Handler();
-    }
-    LOG("RTC: default time set from compile timestamp: %s %s", __DATE__, __TIME__);
+  sTime.Hours = 0x0;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+  sDate.Month = RTC_MONTH_JANUARY;
+  sDate.Date = 0x1;
+  sDate.Year = 0x0;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
 
   /* USER CODE END RTC_Init 2 */
 
-}
-
-/**
-  * @brief DMA Initialization Function (SPI1_TX: DMA2 Stream3 Channel3)
-  */
-static void MX_DMA_Init(void)
-{
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  hdma_spi1_tx.Instance = DMA2_Stream3;
-  hdma_spi1_tx.Init.Channel = DMA_CHANNEL_3;
-  hdma_spi1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
-  hdma_spi1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
-  hdma_spi1_tx.Init.MemInc = DMA_MINC_ENABLE;
-  hdma_spi1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-  hdma_spi1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-  hdma_spi1_tx.Init.Mode = DMA_NORMAL;
-  hdma_spi1_tx.Init.Priority = DMA_PRIORITY_HIGH;
-  HAL_DMA_Init(&hdma_spi1_tx);
-
-  /* 关联 DMA handle 到 SPI1 */
-  __HAL_LINKDMA(&hspi1, hdmatx, hdma_spi1_tx);
-
-  /* 配置 DMA2_Stream3 中断 */
-  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 6, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
 }
 
 /**
@@ -560,7 +520,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;   /* APB2=84MHz, 84/8=10.5MHz, ST7735 max~15MHz */
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -841,27 +801,6 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
-  * @brief USART2 Initialization Function (ESP32 天气数据接收)
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_RX;       /* RX only — ESP32 sends, STM32 listens */
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -946,6 +885,86 @@ int fputc(int ch, FILE *f) {
 }
 #endif
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartTaskButton */
+/**
+  * @brief  Function implementing the TaskButton thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartTaskButton */
+
+/* GCC: StartTask* implementations live in freertos.c.
+   ARMCC: CubeMX stubs in main.c (Keil uses freertos.c too, but linker picks
+   the first definition — ARMCC linker semantics differ from GCC). */
+#ifndef __GNUC__
+
+void StartTaskButton(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTaskBG */
+/**
+* @brief Function implementing the TaskBG thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskBG */
+void StartTaskBG(void *argument)
+{
+  /* USER CODE BEGIN StartTaskBG */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartTaskBG */
+}
+
+/* USER CODE BEGIN Header_StartTaskDisplay */
+/**
+* @brief Function implementing the TaskDisplay thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskDisplay */
+void StartTaskDisplay(void *argument)
+{
+  /* USER CODE BEGIN StartTaskDisplay */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartTaskDisplay */
+}
+
+/* USER CODE BEGIN Header_StartTaskMotor */
+/**
+* @brief Function implementing the TaskMotor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskMotor */
+void StartTaskMotor(void *argument)
+{
+  /* USER CODE BEGIN StartTaskMotor */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartTaskMotor */
+}
+
+#endif /* !__GNUC__ */
 
 /**
   * @brief  Period elapsed callback in non blocking mode
