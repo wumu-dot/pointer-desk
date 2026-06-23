@@ -3,15 +3,12 @@
  *
  * 提供倒计时器功能：
  * - 进度环显示剩余时间比例
- * - 指针实时指示剩余时间
+ * - TFT 屏幕视觉反馈（结束时闪烁替代电机震动）
  * - 支持开始/暂停/重置/调整时长
- * - 结束时震动提示
  */
 
 #include "timer_mode.h"
 #include "gui.h"
-#include "pointer_engine.h"
-#include "a4988.h"
 #include "st7735.h"
 #include "pin_config.h"
 #include "app_config.h"
@@ -90,17 +87,19 @@ void timer_mode_update(void) {
             remaining_sec = 0;
             state         = TIMER_FINISHED;
 
-            /* 震动提示 */
-            a4988_vibrate(TIMER_END_VIBRATE_COUNT, 200);
+            /* TFT 闪烁替代电机震动 */
+            for (uint8_t i = 0; i < TIMER_END_VIBRATE_COUNT; i++) {
+                st7735_fill_screen(COLOR_WHITE);
+                HAL_Delay(150);
+                st7735_fill_screen(COLOR_BLACK);
+                HAL_Delay(150);
+            }
+            gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
             LOG("Timer finished!");
         } else {
             remaining_sec = total_sec - elapsed;
         }
     }
-    /* FINISHED 状态下由 mode_manager 根据 TIMER_END_BUZZ_MS 处理退出 */
-
-    /* 更新物理指针位置 */
-    pointer_set_timer(remaining_sec, total_sec);
 }
 
 void timer_mode_render(void) {

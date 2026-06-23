@@ -10,6 +10,8 @@
 #include "modes/clock_mode.h"
 #include "modes/temp_mode.h"
 #include "modes/timer_mode.h"
+#include "modes/pomodoro_mode.h"
+#include "modes/breathe_mode.h"
 #include "modes/settings_mode.h"
 
 #include "rtc_drv.h"
@@ -45,6 +47,16 @@ static const mode_ops_t mode_ops[MODE_COUNT] = {
         timer_mode_init,   timer_mode_enter,   timer_mode_exit,
         timer_mode_update, timer_mode_render,  timer_mode_handle_button,
         "Timer"
+    },
+    [MODE_POMODORO] = {
+        pomodoro_mode_init,   pomodoro_mode_enter,   pomodoro_mode_exit,
+        pomodoro_mode_update, pomodoro_mode_render,  pomodoro_mode_handle_button,
+        "Pomodoro"
+    },
+    [MODE_BREATHE]  = {
+        breathe_mode_init,   breathe_mode_enter,   breathe_mode_exit,
+        breathe_mode_update, breathe_mode_render,  breathe_mode_handle_button,
+        "Breathe"
     },
     [MODE_SETTINGS] = {
         settings_mode_init,   settings_mode_enter,   settings_mode_exit,

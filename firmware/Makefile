@@ -81,6 +81,8 @@ Core/Src/syscalls.c \
 App/modes/clock_mode.c \
 App/modes/temp_mode.c \
 App/modes/timer_mode.c \
+App/modes/pomodoro_mode.c \
+App/modes/breathe_mode.c \
 App/modes/settings_mode.c \
 App/mode_manager.c \
 App/weather_bridge.c \

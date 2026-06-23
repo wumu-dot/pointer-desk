@@ -18,6 +18,8 @@ typedef enum {
     MODE_CLOCK = 0,
     MODE_TEMP,
     MODE_TIMER,
+    MODE_POMODORO,
+    MODE_BREATHE,
     MODE_SETTINGS,
     MODE_COUNT            /* 模式总数 */
 } mode_id_t;
