@@ -1,58 +1,60 @@
 @echo off
 setlocal enabledelayedexpansion
-
 echo ========================================
-echo OV-Watch / pointer-desk — Build & Flash
+echo OV-Watch Build + Flash (ST-Link SWD)
 echo ========================================
 echo.
 
-:: ---- Path: adjust if your CubeCLT lives elsewhere ----
-set GCC_BIN=C:\ST\STM32CubeCLT_1.21.0\GNU-tools-for-STM32\bin
-set PROG_BIN=C:\ST\STM32CubeCLT_1.21.0\STM32CubeProgrammer\bin
-set MINGW_BIN=C:\mingw64\bin
-set PATH=%GCC_BIN%;%PROG_BIN%;%MINGW_BIN%;%PATH%
+:: ---- Toolchain paths ----
+set "GCC_BIN=C:\ST\STM32CubeCLT_1.21.0\GNU-tools-for-STM32\bin"
+set "PROG_BIN=C:\ST\STM32CubeCLT_1.21.0\STM32CubeProgrammer\bin"
+set "MINGW_BIN=C:\mingw64\bin"
+set "PATH=%GCC_BIN%;%PROG_BIN%;%MINGW_BIN%;%PATH%"
 
 :: ---- 0. Verify toolchain ----
 echo [0/3] Checking toolchain...
-where arm-none-eabi-gcc >nul 2>&1
+"%GCC_BIN%\arm-none-eabi-gcc.exe" --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ arm-none-eabi-gcc not found. Is STM32CubeCLT installed?
+    echo ERROR: arm-none-eabi-gcc not found
     pause
     exit /b 1
 )
-where STM32_Programmer_CLI >nul 2>&1
+"%PROG_BIN%\STM32_Programmer_CLI.exe" --version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ STM32_Programmer_CLI not found. Is CubeProgrammer installed?
+    echo ERROR: STM32_Programmer_CLI not found
     pause
     exit /b 1
 )
-echo ✅ Toolchain OK
+echo OK
 
 :: ---- 1. Build ----
 echo.
 echo [1/3] Building firmware...
-mingw32-make -j6
+call "%MINGW_BIN%\mingw32-make.exe" -j6
 if errorlevel 1 (
     echo.
-    echo ❌ Build failed!
+    echo === BUILD FAILED ===
     pause
-    exit /b %errorlevel%
+    exit /b 1
 )
-echo ✅ Build OK
+echo OK
 
-:: ---- 2. Flash ----
+:: ---- 2. Flash via ST-Link SWD ----
 echo.
-echo [2/3] Flashing firmware...
-STM32_Programmer_CLI -c port=SWD freq=4000 -w build\ov-watch.hex -v -rst
+echo [2/3] Flashing via ST-Link SWD...
+"%PROG_BIN%\STM32_Programmer_CLI.exe" -c port=SWD freq=4000 -w build\ov-watch.hex -v -rst
 if errorlevel 1 (
     echo.
-    echo ❌ Flash failed! Check ST-Link connection and board power.
+    echo === FLASH FAILED ===
+    echo Check ST-Link connection and board power.
     pause
-    exit /b %errorlevel%
+    exit /b 1
 )
-echo ✅ Flash OK
+echo OK
 
+:: ---- 3. Done ----
 echo.
 echo [3/3] Done! Board is running.
+echo Motor self-test starts in ~1s...
 echo.
 pause

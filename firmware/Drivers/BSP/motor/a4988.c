@@ -41,6 +41,8 @@ static motor_state_t motor;
  * ================================================================ */
 static void motor_pwm_stop(void)
 {
+    /* 先清零 CCR，确保 PA0 (STEP) 输出为低电平，避免悬空或高电平静态功耗 */
+    __HAL_TIM_SET_COMPARE(&htim2, MOTOR_STEP_CHANNEL, 0);
     HAL_TIM_PWM_Stop(&htim2, MOTOR_STEP_CHANNEL);
 }
 
@@ -250,6 +252,17 @@ void a4988_emergency_stop(void)
 motor_state_t a4988_get_state(void)
 {
     return motor;
+}
+
+/* ----------------------------------------------------------------
+ * a4988_update_step_count — 更新当前步数估计值（无编码器补偿）
+ *
+ * 电机任务每周期调用，依据已运行的 PWM 脉冲数估算当前位置。
+ * 无物理编码器，累计误差随长周期增大，接近目标后自动归零。
+ * ---------------------------------------------------------------- */
+void a4988_update_step_count(int32_t delta)
+{
+    motor.current_steps += delta;
 }
 
 /* ----------------------------------------------------------------

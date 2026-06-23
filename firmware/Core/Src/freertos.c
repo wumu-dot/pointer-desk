@@ -165,6 +165,22 @@ void StartTaskDisplay(void *argument) {
 void StartTaskMotor(void *argument) {
   (void)argument;
 
+  /* ---- 启动时使能电机 ---- */
+  a4988_enable(true);
+
+  /* ---- 启动自检：低速旋转验证接线 ---- */
+  osDelay(pdMS_TO_TICKS(500));
+  a4988_set_direction(true);
+  a4988_set_speed(50);
+  LOG("Motor self-test: CW 50steps/s 2s");
+  osDelay(pdMS_TO_TICKS(2000));
+  a4988_set_direction(false);
+  LOG("Motor self-test: CCW 50steps/s 2s");
+  osDelay(pdMS_TO_TICKS(2000));
+  a4988_set_speed(0);
+  LOG("Motor self-test: complete");
+  /* ---- 自检结束 ---- */
+
   for (;;) {
     /* 非阻塞检查: 有无新模式发来的目标角度 */
     motor_msg_t target;
@@ -185,9 +201,11 @@ void StartTaskMotor(void *argument) {
     if (diff > 10) {
       a4988_set_direction(true);
       a4988_set_speed(MOTOR_MAX_SPEED);
+      a4988_update_step_count((MOTOR_MAX_SPEED * POINTER_UPDATE_MS) / 1000);
     } else if (diff < -10) {
       a4988_set_direction(false);
       a4988_set_speed(MOTOR_MAX_SPEED);
+      a4988_update_step_count(-(MOTOR_MAX_SPEED * POINTER_UPDATE_MS) / 1000);
     } else {
       a4988_set_speed(0);
       osEventFlagsSet(EvtMotorHandle, 0x01);

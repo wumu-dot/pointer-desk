@@ -22,7 +22,7 @@
 | 湿度计 (SHT30 本地湿度 + 指针刻度) | ✅ |
 | 双温对比 (SHT30本地 vs ESP32区域) | ✅ |
 | 倒计时 / 番茄钟 / 呼吸引导 | ⏳ 计划中 |
-| 物理指针 (42步进 + A4988) | ⏳ 待接线验证 |
+| 物理指针 (42步进 + A4988) | ⚠️ 驱动代码就绪，待换 12V 2A 适配器 |
 
 ## 硬件
 
@@ -33,39 +33,50 @@
 | W25Q64 8MB Flash | SPI2 |
 | 42步进电机 + A4988 | TIM2 (PA0 STEP / PA1 DIR / PA2 EN) |
 | SHT30 温湿度 | I2C2 (PF0 SDA / PF1 SCL) |
-| ESP32 天气桥接 | USART2 (PD6 RX) |
+| ESP32 天气桥接 (weather-clock) | USART2 (PD6 RX) |
 | 单按键 | PA15 |
 
-## 快速开始
+## 工作流
 
-### 跨平台编译（推荐，无需 Keil 许可证）
+> 三步走的完整开发流程，所有脚本双击即用。
 
-```bash
-# Linux / macOS / Windows (Git Bash / WSL)
-cd firmware
-make -j$(nproc)          # 一键编译 → build/ov-watch.elf
-make clean               # 清理编译产物
+### 1. 编译 — 一键 GCC，无需 Keil
 
-# 要求: arm-none-eabi-gcc + make
-# Ubuntu: sudo apt install gcc-arm-none-eabi
-# macOS:  brew install arm-none-eabi-gcc
-# Windows: STM32CubeCLT 自带，或独立安装
-```
-
-### Keil MDK（GUI 调试 / 兼容保留）
+| 脚本 | 用途 | 要求 |
+|------|------|------|
+| `make -j` | 命令行编译 (跨平台) | `arm-none-eabi-gcc` + `make` |
 
 ```
-1. Keil MDK V5 + ARMCC V5 → 打开 firmware/MDK-ARM/ov-watch.uvprojx
-2. Rebuild → 0 Error
-3. ST-Link / ISP 串口烧录
-4. SSCOM 115200 看日志
+# Ubuntu:     sudo apt install gcc-arm-none-eabi
+# macOS:      brew install arm-none-eabi-gcc
+# Windows:    STM32CubeCLT 自带，PATH 含 GNU-tools-for-STM32/bin
 ```
 
-### 一键调试（OpenOCD + GDB）
+### 2. 烧录 — 两种方式，自动识别
 
-```bash
-# 需要 ST-Link 连接开发板
-双击 firmware/openocd_debug.bat   # 自动启动 OpenOCD + GDB，断点在 main
+| 脚本 | 方式 | 需要 |
+|------|------|------|
+| **[build_and_flash.bat](firmware/build_and_flash.bat)** | ST-Link SWD | 插着 ST-Link |
+| **[flash.bat](firmware/flash.bat)** | ISP 串口 (USART1) | BOOT0→HIGH→RESET→烧→BOOT0→LOW |
+
+```
+ISP 手动步骤（无 ST-Link 时）:
+  ① BOOT0 跳到 3.3V
+  ② 按 RESET
+  ③ 双击 flash.bat
+  ④ BOOT0 跳回 GND，按 RESET
+```
+
+### 3. 调试 — OpenOCD + GDB
+
+| 脚本 | 调试器 | 端口 |
+|------|--------|:---:|
+| **[openocd_debug.bat](firmware/openocd_debug.bat)** （推荐） | OpenOCD | 3333 |
+| **[gdb_debug.bat](firmware/gdb_debug.bat)** （备用） | ST-Link GDB Server | 7184 |
+
+```
+双击 openocd_debug.bat → 自动启动 OpenOCD → GDB 连接 → load → break main
+键入 c (continue) 开始运行，Ctrl+C 暂停，bt 看调用栈
 ```
 
 ## CI / Quality Gate
@@ -92,6 +103,7 @@ make clean               # 清理编译产物
 | 功能看板 | [docs/features/INDEX.md](docs/features/INDEX.md) |
 | 设计文档 | [docs/superpowers/specs/](docs/superpowers/specs/) |
 | 实现计划 | [docs/superpowers/plans/](docs/superpowers/plans/) |
+| ESP32 天气源 | [weather-clock](https://github.com/wumu-dot/weather-clock) |
 
 ---
 

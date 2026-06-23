@@ -58,6 +58,7 @@ void a4988_emergency_stop(void);
  * 状态查询
  * ================================================================ */
 motor_state_t a4988_get_state(void);
+void a4988_update_step_count(int32_t delta);
 bool a4988_is_moving(void);
 
 /* ================================================================

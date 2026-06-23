@@ -51,22 +51,31 @@ STM32F407ZGT6 / Keil MDK V5 + ARMCC V5 / FreeRTOS (CMSIS-RTOS v2) / ST7735S TFT 
 ## 约束 & 禁止事项
 
 ### 编译环境
-- **Keil MDK V5 + ARMCC V5**（GUI 编译，保留兼容）
-- **STM32CubeCLT (GCC)**（命令行，**推荐**）
-- 编译命令：`make -j6`（需 `C:\ST\STM32CubeCLT_1.21.0\GNU-tools-for-STM32\bin` 和 `C:\mingw64\bin` 在 PATH）
-- 一键编译+烧录：双击 `build_and_flash.bat`
+- **STM32CubeCLT (GCC)**（命令行，**推荐**，跨平台）
+- **Keil MDK V5 + ARMCC V5**（GUI，兼容保留）
+- 编译命令：`mingw32-make -j6`（Windows）/ `make -j$(nproc)`（Linux/Mac）
 - ARMCC V5 **不支持** `0b` 二进制字面量、C++ 风格注释混用
-- 偶发编译内存溢出：关 Keil → 重开 → Rebuild
 - 编译完运行 `bash .claude/scripts/check-firmware.sh` 验证 18 项检查
 
 ### 烧录方式
-- **仅 ISP 串口下载**，无 ST-Link/SWD
-- 烧录和调试共用 USART1 (PA9/PA10)，烧录时无法看日志
+| 脚本 | 方式 | 说明 |
+|------|------|------|
+| `build_and_flash.bat` | ST-Link SWD | **唯一可用**，一键编译+烧录 |
+| `flash.bat` | ISP 串口 (USART1) | ⚠️ 需 PA9/PA10 接 USB-TTL（当前未接） |
+
+> ⚠️ PA9/PA10 未引出 USB 转 TTL 模块 — **串口日志不可用**，调试通过 TFT 显示 + OpenOCD/GDB
+
+### 调试
+| 脚本 | 调试器 | 端口 |
+|------|--------|:---:|
+| `openocd_debug.bat`（推荐） | OpenOCD + GDB | 3333 |
+| `gdb_debug.bat`（备用） | ST-Link GDB Server | 7184 |
 
 ### 引脚规则
 - **修改任何引脚前必须先看 `Core/Src/stm32f4xx_hal_msp.c`**
 - `pin_config.h` 的宏值必须与 `hal_msp.c` 一致
 - 历史上 5 个引脚因未校验 CubeMX 而写错
+- **A4988 EN → GND**（直接拉低使能），PA2 悬空未用；MS1-3 由模块拨码开关控制
 
 ### 外设总线
 - SPI1 (TFT)：APB2 84MHz ÷ 8 = 10.5MHz
@@ -107,6 +116,6 @@ STM32F407ZGT6 / Keil MDK V5 + ARMCC V5 / FreeRTOS (CMSIS-RTOS v2) / ST7735S TFT 
 - 外部 API：open-meteo（ESP32 端，免费天气数据）
 - 数据手册：`C:\Users\wumu2\OneDrive\桌面\stm32F407ZGT6\`
   - `ST7735S_datasheet.pdf` — TFT 液晶驱动
-  - `A4988_datasheet.pdf` — 步进电机驱动 (Allegro, Rev.8, 2022)
+  - `A4988_datasheet.pdf` — 步进电机驱动 (Allegro)
 - 回归检查：`.claude/scripts/check-firmware.sh`（18 项）
 - Ai 开发规范：`C:\Users\wumu2\OneDrive\桌面\agent\al开发项目规范\`
