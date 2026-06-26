@@ -111,10 +111,18 @@ void clock_mode_update(void)
 {
     rtc_datetime_t dt = rtc_drv_get_datetime();
 
+    /* 每半小时才更新一次指针角度，减少电机微动 */
+    static uint8_t last_bucket = 0xFF;
+    uint8_t bucket = (uint8_t)(dt.time.hours * 2 + dt.time.minutes / 30);
+
+    if (bucket == last_bucket) {
+        return;
+    }
+    last_bucket = bucket;
+
     if (use_24h) {
         pointer_set_clock_24h(dt.time.hours, dt.time.minutes);
     } else {
-        /* 指针引擎使用24h制进行步进电机控制 */
         uint8_t hour24 = dt.time.hours;
         pointer_set_clock(hour24, dt.time.minutes);
     }
