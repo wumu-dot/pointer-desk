@@ -3,7 +3,7 @@
  *
  * 圆圈动画引导缓慢呼吸：
  *   INHALE  (4s): 圆圈从小逐渐变大
- *   HOLD    (7s): 圆圈保持最大，轻微脉冲
+ *   HOLD    (7s): 圆圈保持最大
  *   EXHALE  (8s): 圆圈从大逐渐变小
  *
  * 纯 TFT 视觉反馈，无需电机。长按退出。
@@ -24,14 +24,13 @@
 #define BREATHE_INHALE_S  4
 #define BREATHE_HOLD_S    7
 #define BREATHE_EXHALE_S  8
-#define BREATHE_CYCLE_S   (BREATHE_INHALE_S + BREATHE_HOLD_S + BREATHE_EXHALE_S)  /* 19s */
 
 /* Circle geometry */
 #define RING_CX         64
 #define RING_CY         70
-#define RING_R_MAX      45
-#define RING_R_MIN      8
-#define RING_THICKNESS  5
+#define RING_R_MAX      40
+#define RING_R_MIN      5
+#define RING_THICKNESS  6
 
 /* ================================================================
  * 阶段
@@ -49,13 +48,9 @@ static breathe_phase_t phase;
 static uint32_t        phase_start_tick;
 static bool             running;
 
-/* Render dedup */
-static struct {
-    uint16_t        r;
-    uint16_t        color;
-    breathe_phase_t ph;
-    bool            running;
-} render_cache = { 0, 0, BREATHE_INHALE, false };
+static uint16_t        last_r          = 0xFFFF;  /* dedup: last drawn radius */
+static breathe_phase_t last_phase      = -1;
+static uint32_t        last_sec_remain = 0xFFFFFFFF;
 
 /* ================================================================
  * Helpers
@@ -77,13 +72,15 @@ static uint32_t phase_duration(breathe_phase_t p) {
 void breathe_mode_init(void) {
     phase      = BREATHE_INHALE;
     running    = false;
-    LOG("BREATHE: init");
 }
 
 void breathe_mode_enter(void) {
     running          = true;
     phase            = BREATHE_INHALE;
     phase_start_tick = HAL_GetTick();
+    last_r           = 0xFFFF;
+    last_phase       = -1;
+    last_sec_remain  = 0xFFFFFFFF;
     st7735_fill_screen(COLOR_BLACK);
     gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
     LOG("BREATHE: enter");
@@ -101,22 +98,29 @@ void breathe_mode_update(void) {
     uint32_t elapsed = now - phase_start_tick;
 
     if (elapsed >= phase_duration(phase)) {
-        /* Transition to next phase */
         switch (phase) {
-            case BREATHE_INHALE: phase = BREATHE_HOLD;   break;
-            case BREATHE_HOLD:   phase = BREATHE_EXHALE; break;
-            case BREATHE_EXHALE: phase = BREATHE_INHALE; break;
+            case BREATHE_INHALE:
+                phase = BREATHE_HOLD;
+                LOG("BREATHE: -> HOLD");
+                break;
+            case BREATHE_HOLD:
+                phase = BREATHE_EXHALE;
+                LOG("BREATHE: -> EXHALE");
+                break;
+            case BREATHE_EXHALE:
+                phase = BREATHE_INHALE;
+                LOG("BREATHE: -> INHALE");
+                break;
         }
         phase_start_tick = now;
-        elapsed = 0;
     }
 }
 
 void breathe_mode_render(void) {
     if (!running) return;
 
-    uint32_t elapsed = HAL_GetTick() - phase_start_tick;
-    uint32_t dur     = phase_duration(phase);
+    uint32_t elapsed  = HAL_GetTick() - phase_start_tick;
+    uint32_t dur      = phase_duration(phase);
     float    progress = (dur > 0) ? (float)elapsed / (float)dur : 0.0f;
     if (progress > 1.0f) progress = 1.0f;
 
@@ -125,17 +129,17 @@ void breathe_mode_render(void) {
 
     switch (phase) {
         case BREATHE_INHALE:
-            r     = (uint16_t)(RING_R_MIN + (RING_R_MAX - RING_R_MIN) * progress);
+            r     = (uint16_t)(RING_R_MIN + (float)(RING_R_MAX - RING_R_MIN) * progress);
             color = COLOR_CYAN;
             label = "INHALE";
             break;
         case BREATHE_HOLD:
-            r     = RING_R_MAX;  /* steady at max */
+            r     = RING_R_MAX;
             color = COLOR_GREEN;
             label = "HOLD";
             break;
         case BREATHE_EXHALE:
-            r     = (uint16_t)(RING_R_MAX - (RING_R_MAX - RING_R_MIN) * progress);
+            r     = (uint16_t)(RING_R_MIN + (float)(RING_R_MAX - RING_R_MIN) * (1.0f - progress));
             color = COLOR_ORANGE;
             label = "EXHALE";
             break;
@@ -144,38 +148,35 @@ void breathe_mode_render(void) {
             break;
     }
 
-    /* Dedup */
-    if (r == render_cache.r && color == render_cache.color
-        && phase == render_cache.ph && running == render_cache.running) {
+    uint32_t sec_remain = (dur - elapsed) / 1000 + 1;
+
+    /* ---- Dedup: only redraw if r/phase/sec changed ---- */
+    if (r == last_r && phase == last_phase && sec_remain == last_sec_remain) {
         return;
     }
-    render_cache.r       = r;
-    render_cache.color   = color;
-    render_cache.ph      = phase;
-    render_cache.running = running;
+    last_r          = r;
+    last_phase      = phase;
+    last_sec_remain = sec_remain;
 
-    /* ---- Draw animated circle ---- */
-    /* Erase previous */
-    st7735_fill_rect(RING_CX - RING_R_MAX - RING_THICKNESS,
-                     RING_CY - RING_R_MAX - RING_THICKNESS,
-                     (RING_R_MAX + RING_THICKNESS) * 2,
-                     (RING_R_MAX + RING_THICKNESS) * 2,
-                     COLOR_BLACK);
-    gui_dirty_mark(RING_CX - RING_R_MAX - RING_THICKNESS,
-                   RING_CY - RING_R_MAX - RING_THICKNESS,
-                   (RING_R_MAX + RING_THICKNESS) * 2,
-                   (RING_R_MAX + RING_THICKNESS) * 2);
+    /* ---- Erase ring area with black ---- */
+    uint16_t erase_x = RING_CX - RING_R_MAX - RING_THICKNESS;
+    uint16_t erase_y = RING_CY - RING_R_MAX - RING_THICKNESS;
+    uint16_t erase_s = (RING_R_MAX + RING_THICKNESS) * 2;
+    st7735_fill_rect(erase_x, erase_y, erase_s, erase_s, COLOR_BLACK);
+    gui_dirty_mark(erase_x, erase_y, erase_s, erase_s);
 
-    gui_draw_arc(RING_CX, RING_CY, r, 0, 360, RING_THICKNESS, color);
+    /* ---- Draw ring at current radius (0-359 avoids arc normalize bug) ---- */
+    gui_draw_arc(RING_CX, RING_CY, r, 0, 359, RING_THICKNESS, color);
 
-    /* ---- Phase label ---- */
-    gui_draw_text_centered(RING_CX, RING_CY, label, 1, color, COLOR_BLACK);
+    /* ---- Phase label above ring ---- */
+    gui_draw_text_centered(RING_CX, RING_CY - RING_R_MAX - 12, label,
+                           1, color, COLOR_BLACK);
 
-    /* ---- Time progress for this phase ---- */
-    uint32_t sec_remain = (dur - elapsed) / 1000 + 1;
-    char hint[16];
+    /* ---- Countdown seconds below ring ---- */
+    char hint[8];
     snprintf(hint, sizeof(hint), "%lu\"", (unsigned long)sec_remain);
-    gui_draw_text_centered(RING_CX, 140, hint, 0, COLOR_GRAY, COLOR_BLACK);
+    gui_draw_text_centered(RING_CX, RING_CY + RING_R_MAX + 12, hint,
+                           0, COLOR_GRAY, COLOR_BLACK);
 
     /* ---- Bottom hint ---- */
     gui_draw_text_aligned(155, "HOLD: exit",
@@ -184,7 +185,6 @@ void breathe_mode_render(void) {
 
 void breathe_mode_handle_button(button_id_t btn, button_event_t event) {
     (void)btn;
-    /* Long press exits breathe mode (mode_manager auto-switches to next mode) */
     if (event == BTN_EVENT_LONG_PRESS) {
         running = false;
         LOG("BREATHE: user exit");

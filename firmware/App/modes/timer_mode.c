@@ -133,7 +133,7 @@ void timer_mode_render(void) {
     }
 
     /* ---- 背景环 (灰色整圈) ---- */
-    gui_draw_arc(64, 55, 40, 0, 360, 4, COLOR_DARK_GRAY);
+    gui_draw_arc(64, 55, 40, 0, 359, 4, COLOR_DARK_GRAY);
 
     /* ---- 前景环 (已走完的部分) ---- */
     if (end_deg > 0) {

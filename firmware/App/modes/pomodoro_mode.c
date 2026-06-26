@@ -143,7 +143,7 @@ void pomodoro_mode_render(void) {
     ratio   = 1.0f - (float)remaining_sec / (float)total_sec;
     end_deg = (int16_t)(ratio * 360.0f);
 
-    gui_draw_arc(64, 50, 38, 0, 360, 4, COLOR_DARK_GRAY);
+    gui_draw_arc(64, 50, 38, 0, 359, 4, COLOR_DARK_GRAY);
     if (end_deg > 0) {
         gui_draw_arc(64, 50, 38, 0, end_deg, 4, ring_color);
     }

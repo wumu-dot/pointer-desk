@@ -75,7 +75,7 @@ STM32F407ZGT6 / Keil MDK V5 + ARMCC V5 / FreeRTOS (CMSIS-RTOS v2) / ST7735S TFT 
 - **修改任何引脚前必须先看 `Core/Src/stm32f4xx_hal_msp.c`**
 - `pin_config.h` 的宏值必须与 `hal_msp.c` 一致
 - 历史上 5 个引脚因未校验 CubeMX 而写错
-- **A4988 EN → GND**（直接拉低使能），PA2 悬空未用；MS1-3 由模块拨码开关控制
+- **A4988 EN → PA2**（低有效使能，空闲高禁用防过热）；MS1-3 由模块拨码开关控制
 
 ### 外设总线
 - SPI1 (TFT)：APB2 84MHz ÷ 8 = 10.5MHz

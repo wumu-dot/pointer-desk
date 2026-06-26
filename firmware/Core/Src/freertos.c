@@ -178,36 +178,42 @@ void StartTaskMotor(void *argument) {
   LOG("Motor self-test: CCW 50steps/s 2s");
   osDelay(pdMS_TO_TICKS(2000));
   a4988_set_speed(0);
+  a4988_enable(false);                        /* 自检结束，释放电机 */
+  /* 同步当前位置到指针角度，避免正常循环立即全速运转 */
+  {
+    float angle = pointer_get_current_angle();
+    int32_t steps = (int32_t)(angle * MOTOR_TOTAL_STEPS / 360.0f);
+    a4988_update_step_count(steps);            /* 覆盖 current_steps=0 */
+  }
   LOG("Motor self-test: complete");
   /* ---- 自检结束 ---- */
+  (void)argument;                              /* suppress unused warning */
 
   for (;;) {
-    /* 非阻塞检查: 有无新模式发来的目标角度 */
     motor_msg_t target;
     if (osMessageQueueGet(QueueMotorTargetsHandle, &target, NULL, 0) == osOK) {
       pointer_set_target(target.target_angle, (pointer_move_mode_t)target.move_mode);
     }
 
-    /* 每 50ms 无条件驱动指针引擎平滑插值 */
     pointer_engine_update();
 
-    /* 角度 → 微步数 → A4988 控制 */
     float angle = pointer_get_current_angle();
     int32_t target_steps = (int32_t)(angle * MOTOR_TOTAL_STEPS / 360.0f);
-
-    motor_state_t ms = a4988_get_state();
-    int32_t diff = target_steps - ms.current_steps;
+    int32_t diff = target_steps - a4988_get_state().current_steps;
 
     if (diff > 10) {
+      a4988_enable(true);
       a4988_set_direction(true);
       a4988_set_speed(MOTOR_MAX_SPEED);
       a4988_update_step_count((MOTOR_MAX_SPEED * POINTER_UPDATE_MS) / 1000);
     } else if (diff < -10) {
+      a4988_enable(true);
       a4988_set_direction(false);
       a4988_set_speed(MOTOR_MAX_SPEED);
       a4988_update_step_count(-(MOTOR_MAX_SPEED * POINTER_UPDATE_MS) / 1000);
     } else {
       a4988_set_speed(0);
+      a4988_enable(false);
       osEventFlagsSet(EvtMotorHandle, 0x01);
     }
 
