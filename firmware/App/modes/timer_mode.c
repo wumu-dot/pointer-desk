@@ -63,10 +63,11 @@ void timer_mode_init(void) {
 
 void timer_mode_enter(void) {
     if (state == TIMER_STOPPED) {
-        /* 每次从停止态进入时，重置为设定的总时长 */
         remaining_sec = total_sec;
     }
-    /* PAUSED 态保持原有 remaining_sec，FINISHED 态也保持不变 */
+    /* 重置渲染缓存，确保进入时强制重绘 */
+    render_cache.remaining = 0xFFFFFFFF;
+    render_cache.st        = TIMER_STOPPED;
     timer_refresh_display();
 }
 

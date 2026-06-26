@@ -61,6 +61,9 @@ void pomodoro_mode_init(void) {
 }
 
 void pomodoro_mode_enter(void) {
+    /* 重置渲染缓存，确保重绘 */
+    render_cache.remaining = 0xFFFFFFFF;
+    render_cache.sessions  = 0xFF;
     st7735_fill_screen(COLOR_BLACK);
     gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
     LOG("POMODORO: enter, phase=%d sessions=%u", phase, completed_sessions);
