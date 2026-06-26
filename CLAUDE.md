@@ -99,9 +99,11 @@ STM32F407ZGT6 / Keil MDK V5 + ARMCC V5 / FreeRTOS (CMSIS-RTOS v2) / ST7735S TFT 
 
 ### GDB 调试
 - 环境已配好：`openocd_debug.bat`（OpenOCD + GDB，端口 3333）
-- 能下断点、看寄存器、查 HardFault 调用栈
-- 硬件问题（供电/Vref/接线）优先万用表；代码逻辑问题优先 GDB
-- 优先用 GDB 而非串口日志排查单步问题
+- **三步调试法**：CodeGraph（地图定位）→ OpenOCD（连接板子）→ GDB（断点看寄存器）
+- CodeGraph 搜函数名、调用链、外设初始化位置 — 用 `codegraph_explore` 定位问题代码
+- GDB 下断点：`break <函数名>` 或 `break <文件>:<行号>`
+- 关键命令：`c`（继续）、`n`（单步）、`s`（进入函数）、`bt`（调用栈）、`p var`（打印变量）、`p/x *(uint32_t*)<外设地址>`（看寄存器）
+- 硬件问题（供电/Vref/接线）优先万用表；代码逻辑问题优先 CodeGraph → GDB
 
 ### A4988 电机
 - EN → PA2，低有效使能，空闲 HIGH 断电防过热
