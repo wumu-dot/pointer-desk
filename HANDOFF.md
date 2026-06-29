@@ -75,7 +75,7 @@ main.c
 | **W25Q64** | CS / SCK / MOSI / MISO | PB12 / PB10 / PC3 / PC2 | 下排 |
 | **A4988** | STEP / DIR / EN | PA0 / PA1 / PA2 | 下排 |
 | **ESP32** | TX→RX | PD6 (USART2_RX) | 上排 D6 |
-| **按键** | KEY | PA15 | 上排 A15 |
+| **按键 (PB6-9)** | UP/DOWN/LEFT/RIGHT | PB6/PB7/PB8/PB9 | 四键飞线，内置上拉 |
 | **串口** | TX/RX | 板子 RXD/TXD | USB-TTL 交叉接 |
 
 ---

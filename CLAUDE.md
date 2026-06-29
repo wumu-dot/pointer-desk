@@ -3,6 +3,7 @@
 主控：STM32F407ZGT6（鹿小班 LXB407ZG-P1）| HSE 8MHz | 调试 ST-Link SWD
 显示：1.8" TFT ST7735S（SPI1 84MHz÷8=10.5MHz）| 存储：W25Q64 Flash（SPI2 42MHz÷16=2.625MHz）
 传感器：SHT30 温湿度（I2C2，PF0/PF1）| 电机：A4988（EN→PA2，低有效使能，空闲HIGH断电）
+按键：PB6(上)/PB7(下)/PB8(左)/PB9(右) 四键，GPIO内置上拉
 无线：ESP32 天气桥接（UART DMA接收）
 
 ## 软件环境

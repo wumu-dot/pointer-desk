@@ -161,42 +161,41 @@ void timer_mode_render(void) {
                            COLOR_BLACK);
 
     /* ---- 底部提示 ---- */
-    gui_draw_text_aligned(150, "HOLD: START/PAUSE",
+    gui_draw_text_aligned(150, "RIGHT:start/stop  UP/DOWN:mode",
                           0, COLOR_DARK_GRAY, COLOR_BLACK, GUI_ALIGN_CENTER);
 }
 
 void timer_mode_handle_button(button_id_t btn, button_event_t event) {
-    /* 单键模式: 只有长按到达这里 (短按由 mode_manager 控制切换) */
 
-    /* FINISHED → 长按重置 */
-    if (state == TIMER_FINISHED && event == BTN_EVENT_LONG_PRESS) {
-        state         = TIMER_STOPPED;
-        remaining_sec = total_sec;
-        LOG("Timer reset from FINISHED");
-        st7735_fill_screen(COLOR_BLACK);
-        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
-        return;
-    }
-
-    /* RUNNING → 长按暂停 */
-    if (state == TIMER_RUNNING && event == BTN_EVENT_LONG_PRESS) {
-        state = TIMER_PAUSED;
-        LOG("Timer paused");
-        st7735_fill_screen(COLOR_BLACK);
-        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
-        return;
-    }
-
-    /* STOPPED/PAUSED → 长按开始/继续 */
-    if ((state == TIMER_STOPPED || state == TIMER_PAUSED) && event == BTN_EVENT_LONG_PRESS) {
-        if (state == TIMER_PAUSED) {
-            start_tick = HAL_GetTick() - (total_sec - remaining_sec) * 1000;
-        } else {
+    /* RIGHT 短按 = 开始/暂停 */
+    if ((btn == BTN_RIGHT || btn == BTN_CENTER) && event == BTN_EVENT_SHORT_PRESS) {
+        if (state == TIMER_FINISHED) {
+            state = TIMER_STOPPED;
             remaining_sec = total_sec;
-            start_tick    = HAL_GetTick();
+            LOG("Timer reset from FINISHED");
+        } else if (state == TIMER_RUNNING) {
+            state = TIMER_PAUSED;
+            LOG("Timer paused");
+        } else {
+            if (state == TIMER_PAUSED) {
+                start_tick = HAL_GetTick() - (total_sec - remaining_sec) * 1000;
+            } else {
+                remaining_sec = total_sec;
+                start_tick    = HAL_GetTick();
+            }
+            state = TIMER_RUNNING;
+            LOG("Timer started (remaining=%lu sec)", (unsigned long)remaining_sec);
         }
-        state = TIMER_RUNNING;
-        LOG("Timer started (remaining=%lu sec)", (unsigned long)remaining_sec);
+        st7735_fill_screen(COLOR_BLACK);
+        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        return;
+    }
+
+    /* LONG = 重置 */
+    if (event == BTN_EVENT_LONG_PRESS) {
+        state = TIMER_STOPPED;
+        remaining_sec = total_sec;
+        LOG("Timer reset");
         st7735_fill_screen(COLOR_BLACK);
         gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
     }

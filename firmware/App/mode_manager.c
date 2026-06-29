@@ -148,13 +148,39 @@ void mode_manager_handle_button(button_id_t btn, button_event_t event)
         return;
     }
 
-    /* 单键模式: SHORT = 下一个模式, LONG = 当前模式动作 */
+    /* ---- 四键导航 ---- */
     if (event == BTN_EVENT_SHORT_PRESS) {
-        mode_id_t next = (current_mode + 1) % MODE_COUNT;
-        mode_manager_switch_to(next);
-        return;
+        switch (btn) {
+            case BTN_UP: {
+                /* 上一模式 (循环) */
+                mode_id_t prev = (current_mode == 0)
+                    ? (MODE_COUNT - 1) : (current_mode - 1);
+                mode_manager_switch_to(prev);
+                return;
+            }
+            case BTN_DOWN: {
+                /* 下一模式 (循环) */
+                mode_id_t next = (current_mode + 1) % MODE_COUNT;
+                mode_manager_switch_to(next);
+                return;
+            }
+            case BTN_RIGHT:
+            case BTN_CENTER:
+                /* 确认 / 执行当前模式动作 (短按=进入子页/确认) */
+                if (mode_ops[current_mode].button != NULL) {
+                    mode_ops[current_mode].button(btn, BTN_EVENT_SHORT_PRESS);
+                }
+                return;
+            case BTN_LEFT:
+                /* 返回 / 退出当前模式 → 回到 Clock */
+                mode_manager_switch_to(MODE_CLOCK);
+                return;
+            default:
+                return;
+        }
     }
 
+    /* 长按: 委托给当前模式处理 */
     if (event == BTN_EVENT_LONG_PRESS) {
         if (mode_ops[current_mode].button != NULL) {
             mode_ops[current_mode].button(btn, event);

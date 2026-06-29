@@ -116,13 +116,17 @@ void settings_mode_render(void)
                            temp_unit_fahrenheit ? "Unit: F" : "Unit: C",
                            0, COLOR_GRAY, COLOR_BLACK);
 
-    gui_draw_text_centered(LCD_WIDTH / 2, 150, "HOLD: exit",
+    gui_draw_text_centered(LCD_WIDTH / 2, 150, "RIGHT:enter  LEFT:back",
                            0, COLOR_DARK_GRAY, COLOR_BLACK);
 }
 
 void settings_mode_handle_button(button_id_t btn, button_event_t event)
 {
-    /* 单键模式: 仅长按有效 → 退出设置菜单返回时钟 */
+    /* RIGHT 短按/长按 → 退出设置 */
+    if ((btn == BTN_RIGHT || btn == BTN_CENTER) && event == BTN_EVENT_SHORT_PRESS) {
+        mode_manager_switch_to(MODE_CLOCK);
+        return;
+    }
     if (event == BTN_EVENT_LONG_PRESS) {
         mode_manager_switch_to(MODE_CLOCK);
     }

@@ -213,7 +213,16 @@ void clock_mode_render(void)
 
 void clock_mode_handle_button(button_id_t btn, button_event_t event)
 {
-    /* 单键模式: 长按切换 12/24h */
+    /* RIGHT 短按或长按 = 切换 12/24h */
+    if ((btn == BTN_RIGHT || btn == BTN_CENTER) && event == BTN_EVENT_SHORT_PRESS) {
+        use_24h = !use_24h;
+        rtc_format_t fmt = use_24h ? RTC_FORMAT_24H : RTC_FORMAT_12H;
+        rtc_drv_set_format(fmt);
+        LOG("CLOCK: format switched to %s", use_24h ? "24h" : "12h");
+        trigger_full_refresh();
+        return;
+    }
+
     if (event == BTN_EVENT_LONG_PRESS) {
         use_24h = !use_24h;
         rtc_format_t fmt = use_24h ? RTC_FORMAT_24H : RTC_FORMAT_12H;

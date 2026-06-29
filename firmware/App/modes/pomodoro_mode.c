@@ -168,15 +168,28 @@ void pomodoro_mode_render(void) {
                            COLOR_BLACK);
 
     /* ---- Hint ---- */
-    gui_draw_text_aligned(150, "HOLD: reset",
+    gui_draw_text_aligned(150, "RIGHT:start/pause  LONG:reset",
                           0, COLOR_DARK_GRAY, COLOR_BLACK, GUI_ALIGN_CENTER);
 }
 
 void pomodoro_mode_handle_button(button_id_t btn, button_event_t event) {
-    (void)btn;
 
+    /* RIGHT 短按 = 启动/暂停 */
+    if ((btn == BTN_RIGHT || btn == BTN_CENTER) && event == BTN_EVENT_SHORT_PRESS) {
+        if (start_tick == 0) {
+            start_tick = HAL_GetTick();
+            LOG("POMODORO: started");
+        } else {
+            start_tick = 0;
+            LOG("POMODORO: paused (start_tick=0)");
+        }
+        st7735_fill_screen(COLOR_BLACK);
+        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        return;
+    }
+
+    /* LONG = 重置 */
     if (event == BTN_EVENT_LONG_PRESS) {
-        /* Reset: back to work phase */
         total_sec          = POMODORO_WORK_SEC;
         remaining_sec      = total_sec;
         phase              = PHASE_WORK;

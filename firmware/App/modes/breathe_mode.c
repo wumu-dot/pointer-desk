@@ -179,12 +179,31 @@ void breathe_mode_render(void) {
                            0, COLOR_GRAY, COLOR_BLACK);
 
     /* ---- Bottom hint ---- */
-    gui_draw_text_aligned(155, "HOLD: exit",
+    gui_draw_text_aligned(155, "RIGHT:start/stop  LEFT:back",
                           0, COLOR_DARK_GRAY, COLOR_BLACK, GUI_ALIGN_CENTER);
 }
 
 void breathe_mode_handle_button(button_id_t btn, button_event_t event) {
-    (void)btn;
+
+    /* RIGHT 短按 = 开始/暂停呼吸 */
+    if ((btn == BTN_RIGHT || btn == BTN_CENTER) && event == BTN_EVENT_SHORT_PRESS) {
+        if (running) {
+            running = false;
+            LOG("BREATHE: paused");
+        } else {
+            running = true;
+            phase_start_tick = HAL_GetTick();
+            phase = BREATHE_INHALE;
+            last_r = 0xFFFF;
+            last_phase = -1;
+            LOG("BREATHE: started");
+        }
+        st7735_fill_screen(COLOR_BLACK);
+        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        return;
+    }
+
+    /* LONG = 退出呼吸 */
     if (event == BTN_EVENT_LONG_PRESS) {
         running = false;
         LOG("BREATHE: user exit");

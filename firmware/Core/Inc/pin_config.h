@@ -96,19 +96,18 @@
 #define MOTOR_ACCEL         800            /* 加速度 (步/秒²) */
 
 /* ================================================================
- * 按键 — PA15 (KEY) 单键输入
+ * 按键 — PB6/PB7/PB8/PB9 四键输入
  * ================================================================ */
-#define BTN_CENTER_PIN      GPIO_PIN_15
-#define BTN_CENTER_PORT     GPIOA
-/* 其他按键未连接, 指向同引脚避免扫描异常 */
-#define BTN_UP_PIN          GPIO_PIN_15
-#define BTN_UP_PORT         GPIOA
-#define BTN_DOWN_PIN        GPIO_PIN_15
-#define BTN_DOWN_PORT       GPIOA
-#define BTN_LEFT_PIN        GPIO_PIN_15
-#define BTN_LEFT_PORT       GPIOA
-#define BTN_RIGHT_PIN       GPIO_PIN_15
-#define BTN_RIGHT_PORT      GPIOA
+#define BTN_UP_PIN          GPIO_PIN_6
+#define BTN_UP_PORT         GPIOB
+#define BTN_DOWN_PIN        GPIO_PIN_7
+#define BTN_DOWN_PORT       GPIOB
+#define BTN_LEFT_PIN        GPIO_PIN_8
+#define BTN_LEFT_PORT       GPIOB
+#define BTN_RIGHT_PIN       GPIO_PIN_9
+#define BTN_RIGHT_PORT      GPIOB
+#define BTN_CENTER_PIN      GPIO_PIN_9   /* 四键无独立确认键，复用 RIGHT */
+#define BTN_CENTER_PORT     GPIOB
 
 /* 按键参数 */
 #define BTN_DEBOUNCE_MS     20          /* 去抖时间 */

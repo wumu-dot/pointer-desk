@@ -256,7 +256,7 @@ static void render_humidity_page(void)
     }
 
     /* 底部提示 */
-    gui_draw_text_centered(LCD_WIDTH / 2, 150, "HOLD: next",
+    gui_draw_text_centered(LCD_WIDTH / 2, 150, "RIGHT:next  LEFT:back",
                            0, COLOR_DARK_GRAY, COLOR_BLACK);
 
     gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
@@ -378,7 +378,7 @@ static void render_comparison_page(void)
     }
 
     /* 底部提示 */
-    gui_draw_text_centered(LCD_WIDTH / 2, 150, "HOLD: next",
+    gui_draw_text_centered(LCD_WIDTH / 2, 150, "RIGHT:next  LEFT:back",
                            0, COLOR_DARK_GRAY, COLOR_BLACK);
 
     gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
@@ -451,7 +451,7 @@ static void render_device_info_page(void)
     }
 
     /* ---- 底部提示 ---- */
-    gui_draw_text_centered(LCD_WIDTH / 2, 145, "HOLD: next",
+    gui_draw_text_centered(LCD_WIDTH / 2, 145, "RIGHT:next  LEFT:back",
                            0, COLOR_DARK_GRAY, COLOR_BLACK);
 
     gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
@@ -477,8 +477,17 @@ void temp_mode_render(void)
 
 void temp_mode_handle_button(button_id_t btn, button_event_t event)
 {
+    /* RIGHT 短按 = 下一页 */
+    if ((btn == BTN_RIGHT || btn == BTN_CENTER) && event == BTN_EVENT_SHORT_PRESS) {
+        current_page = (temp_page_t)((current_page + 1) % TEMP_PAGE_COUNT);
+        memset(&last_rendered_weather, 0, sizeof(last_rendered_weather));
+        st7735_fill_screen(COLOR_BLACK);
+        gui_dirty_mark(0, 0, LCD_WIDTH, LCD_HEIGHT);
+        LOG("TEMP: page=%d", current_page);
+        return;
+    }
+
     if (event == BTN_EVENT_LONG_PRESS) {
-        /* 长按轮转 4 页 */
         current_page = (temp_page_t)((current_page + 1) % TEMP_PAGE_COUNT);
         memset(&last_rendered_weather, 0, sizeof(last_rendered_weather));
         st7735_fill_screen(COLOR_BLACK);
